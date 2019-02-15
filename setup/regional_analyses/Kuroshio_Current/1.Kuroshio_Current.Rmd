@@ -1,0 +1,480 @@
+---
+  title: "Initial analysis: Kuroshio Current"
+author:
+  - affiliation: University of the Western Cape
+name: AJ Smit
+date: "28 October 2018"
+output:
+  bookdown::html_document2:
+  fig_caption: yes
+fig_retina: 2
+fig_width: 7
+highlight: espresso
+theme: sandstone
+toc_float: no
+html_document:
+  fig_caption: yes
+fig_retina: 2
+fig_width: 7
+highlight: espresso
+theme: sandstone
+toc_float: no
+bookdown::pdf_document2:
+  fig_caption: yes
+fig_height: 6.5
+fig_width: 6.5
+highlight: default
+keep_tex: yes
+latex_engine: xelatex
+template: LaTeX/template-article_ajs.tex
+word_document:
+  fig_caption: yes
+fig_height: 7
+fig_width: 7
+highlight: zenburn
+toc: no
+fontsize: 10pt
+geometry: margin=1in
+language: Australian
+mainfont: Minion Pro
+monofont: Myriad Pro
+csl: LaTeX/frontiers.csl
+papersize: A4
+sansfont: Myriad Pro
+tables: yes
+bibliography: LaTeX/bibliography.bib
+---
+
+```{r global_options, include = FALSE}
+knitr::opts_chunk$set(include = FALSE, echo = FALSE, warning = FALSE,
+                      message = FALSE, tidy = FALSE, cache = TRUE,
+                      fig.align = 'left', fig.show = 'hold',
+                      fig.path = '../figures/regional-')
+```
+
+```{r}
+library(data.table)
+library(fasttime)
+library(heatwaveR)
+library(plyr)
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(ggpubr)
+library(doMC); doMC::registerDoMC(cores = 4)
+
+# Functions: velocities, EKE, etc.
+source("../../functions.R")
+
+# Read in the region-specific components
+source("../../plot.layers.R")
+
+# Regional plotting setup
+source("../../regional_analyses/1.regional_setup.R")
+
+# The bathy data
+source("../../regionDefinition.R")
+bathyDir <- "/Users/ajsmit/spatial/GEBCO_2014_Grid/csv"
+bathy_GS <- fread(paste0(bathyDir, "/KC_bathy.csv"))
+
+# Various paths
+subDir <- "/Volumes/Benguela/spatial/processed/OISSTv2/WBC/subregions"
+OISSTDir <- "/Volumes/Benguela/spatial/processed/OISSTv2/WBC/climatology"
+evDir <- "/Volumes/Benguela/spatial/processed/OISSTv2/WBC/MHWs"
+```
+
+```{r prepare-subregions}
+# recode factors and create mean of replicate 'in' and 'out' regions within each current, etc.
+subs.in <- as.tibble(fread(paste0(subDir, "/all-sub-avhrr-only-v2-19810904-20180928.csv")))
+subs.raw <- subs.in %>%
+  mutate(t = fastDate(t)) %>%
+  mutate(location = fct_recode(ID,
+                               "current" = "sub1",
+                               "current" = "sub2",
+                               "current" = "sub3",
+                               "reference" = "sub4",
+                               "reference" = "sub5",
+                               "reference" = "sub6",
+                               "event" = "sub7",
+                               "event" = "sub8",
+                               "event" = "sub9")) %>%
+  group_by(t, region, location) %>%
+  dplyr::summarise(temp = mean(temp, na.rm = TRUE)) %>%
+  ungroup() %>%
+  filter(region == "KC")
+rm(subs.in)
+```
+
+```{r subs-climatologies}
+# events and climatologies: create climatology and create events for each
+# of the regions and 'in' and 'out' groups
+
+# CLIMATOLOGY function
+ts2clm.grid <- function(data) {
+  out <- ts2clm(data, x = t, y = temp,
+                climatologyPeriod = c("1983-01-01", "2012-12-31"),
+                robust = FALSE, maxPadLength = 3, windowHalfWidth = 5,
+                pctile = 90, smoothPercentile = TRUE,
+                smoothPercentileWidth = 31, clmOnly = FALSE)
+  return(out)
+}
+
+climatology <- as.tibble(ddply(subs.raw, .(location), ts2clm.grid, .parallel = TRUE, .progress = "text"))
+```
+
+```{r subs-events}
+# DETECT FUNCTION using heatwaveR
+detect.grid <- function(dat) {
+  out <- heatwaveR::detect_event(dat)
+  event <- out$event
+  return(event)
+}
+
+events <- as.tibble(ddply(climatology, .(location), detect.grid, .parallel = TRUE, .progress = "text"))
+
+detect.grid.long <- function(dat) {
+  out <- heatwaveR::detect_event(dat, protoEvents = TRUE)
+  return(out)
+}
+
+events.long <- as.tibble(ddply(climatology, .(location), detect.grid.long, .parallel = TRUE, .progress = "text"))
+```
+
+```{r largest-subs-events}
+# largest Agulhas Current events
+(top.ev <- events %>%
+  filter(date_start >= "1996-01-01") %>% 
+  filter(location == "event") %>%
+  dplyr::arrange(desc(intensity_mean)) %>% 
+  head(5) %>% 
+  dplyr::select(date_start:date_end) %>% 
+  as.matrix())
+```
+
+```{r flame-graphs}
+plt1 <- flame.plot(climatology, "KC", "reference")
+plt2 <- flame.plot(climatology, "KC", "current")
+plt3 <- flame.plot(climatology, "KC", "event")
+
+ggarrange(plt1,
+          plt2,
+          plt3,
+          ncol = 1, nrow = 3)
+# ggplot2::ggsave("../Kuroshio_Current/KC_OISST_flame_2010-2018.pdf",
+#                 width = 7.0 * (1/3), height = 5 * (1/3), scale = 3.5)
+```
+
+```{r load-current-eke}
+vel_KC <- as.tibble(fread(paste0(AvisoDir, "/KC-dataset-duacs-rep-global-merged-allsat-phy-l4-v3.csv"),
+                          colClasses = list("numeric" = 1:2, "myDate" = 3, "numeric" = 4:7),
+                          col.names = c("lon", "lat", "time", "u", "v", "sla", "adt")))
+```
+
+```{r current-eke-map-prep}
+# Plot current/EKE on peak of most intense mean event
+# events limited to the Aviso+ era
+KC_ev1 <- vel_KC %>%
+  filter(time == top.ev[1, 2]) %>%
+  mutate(velocity = sqrt((v^2) + (u^2)),
+         eke = 0.5 * (u^2 + v^2),
+         arrow_size = ((abs(u * v) / max(abs(u * v))) + 0.3) / 6)
+
+# KC_ev1a <- vel_KC %>%
+#   filter(time == "2014-04-24") %>%
+#   mutate(velocity = sqrt((v^2) + (u^2)),
+#          eke = 0.5 * (u^2 + v^2),
+#          arrow_size = ((abs(u * v) / max(abs(u * v))) + 0.3) / 6)
+
+# Plot current/EKE on peak of second most intense mean event
+KC_ev2 <- vel_KC %>%
+  filter(time == top.ev[2, 2]) %>%
+  mutate(velocity = sqrt((v^2) + (u^2)),
+         eke = 0.5 * (u^2 + v^2),
+         arrow_size = ((abs(u * v) / max(abs(u * v))) + 0.3) / 6)
+
+# Plot current/EKE on peak of third most intense mean event
+KC_ev3 <- vel_KC %>%
+  filter(time == top.ev[3, 2]) %>%
+  mutate(velocity = sqrt((v^2) + (u^2)),
+         eke = 0.5 * (u^2 + v^2),
+         arrow_size = ((abs(u * v) / max(abs(u * v))) + 0.3) / 6)
+```
+
+```{r current-eke-map}
+vel.plot(KC_ev1, bathy_KC, KC.layers) + labs(subtitle = paste(top.ev[1, 2]))
+ggplot2::ggsave(paste0("../Kuroshio_Current/KC_peak_mean_intensity_map_", top.ev[1, 2], ".pdf"),
+                width = 7.0 * (1/3), height = 5 * (1/3), scale = 3.5)
+
+vel.plot(KC_ev2, bathy_KC, KC.layers) + labs(subtitle = paste(top.ev[2, 2]))
+ggplot2::ggsave(paste0("../Kuroshio_Current/KC_peak_mean_intensity_map_", top.ev[2, 2], ".pdf"),
+                width = 7.0 * (1/3), height = 5 * (1/3), scale = 3.5)
+
+vel.plot(KC_ev3, bathy_KC, KC.layers) + labs(subtitle = paste(top.ev[3, 2]))
+ggplot2::ggsave(paste0("../Kuroshio_Current/KC_peak_mean_intensity_map_", top.ev[3, 2], ".pdf"),
+width = 7.0 * (1/3), height = 5 * (1/3), scale = 3.5)
+```
+
+```{r load-daily-OISST}
+# load the temp and climatology
+sst <- fread(paste0(OISSTDir, "/KC-avhrr-only-v2.19810901-20180930_climatology.csv"),
+             colClasses = list("numeric" = 1:3, "myDate" = 4, "numeric" = 5:7))
+
+# load the events
+ev <- as.tibble(fread(paste0(evDir, "/KC-avhrr-only-v2.19810901-20180930_events.csv")))
+```
+
+```{r}
+ev.hov <- tibble(lon = rep(ev$lon, ev$duration),
+                 lat = rep(ev$lat, ev$duration),
+                 t = rep(ev$date_start, ev$duration))
+junk <- lapply(ev$duration, seq_len) # ldply?
+junk2 <- do.call(rbindlist, junk)
+```
+
+
+```{r Hovmöller-prep}
+hov1 <- sst %>%
+  dplyr::filter(lon >= 144 & lon <= 145) %>%
+  dplyr::filter(lat >= 32.5 & lat <= 41) %>%
+  dplyr::filter(t >= as.Date(top.ev[1, 1]) %m-% months(1) &
+                  t <= as.Date(top.ev[1, 3]) %m+% months(1)) %>%
+  dplyr::mutate(t = fastDate(t)) %>%
+  dplyr::group_by(lat, t) %>%
+  dplyr::summarise(temp = mean(temp, na.rm = TRUE),
+                   seas = mean(seas, na.rm = TRUE),
+                   thresh = mean(thresh, na.rm = TRUE)) %>%
+  dplyr::ungroup()
+
+hov2 <- sst %>%
+  dplyr::filter(lon >= 144 & lon <= 145) %>%
+  dplyr::filter(lat >= 32.5 & lat <= 41) %>%
+  dplyr::filter(t >= as.Date(top.ev[2, 1]) %m-% months(1) &
+                  t <= as.Date(top.ev[2, 3]) %m+% months(1)) %>%
+  dplyr::mutate(t = fastDate(t)) %>%
+  dplyr::group_by(lat, t) %>%
+  dplyr::summarise(temp = mean(temp, na.rm = TRUE),
+                   seas = mean(seas, na.rm = TRUE),
+                   thresh = mean(thresh, na.rm = TRUE)) %>%
+  dplyr::ungroup()
+
+hov3 <- sst %>%
+  dplyr::filter(lon >= 144 & lon <= 145) %>%
+  dplyr::filter(lat >= 32.5 & lat <= 41) %>%
+  dplyr::filter(t >= as.Date(top.ev[3, 1]) %m-% months(1) &
+                  t <= as.Date(top.ev[3, 3]) %m+% months(1)) %>%
+  dplyr::mutate(t = fastDate(t)) %>%
+  dplyr::group_by(lat, t) %>%
+  dplyr::summarise(temp = mean(temp, na.rm = TRUE),
+                   seas = mean(seas, na.rm = TRUE),
+                   thresh = mean(thresh, na.rm = TRUE)) %>%
+  dplyr::ungroup()
+```
+
+```{r Hovmöller-function}
+hov.plt <- function(data, start, peak, end) {
+  ggplot(data, aes(x = t, y = lat)) +
+  geom_raster(aes(fill = temp - seas), interpolate = FALSE) +
+  scale_fill_gradientn(name = "SST anomaly (°C)",
+                       colours = col1, limits = c(-8.5, 8.5), position = "bottom") +
+  guides(fill = guide_colourbar(frame.colour = "black",
+                                frame.linewidth = 0.5,
+                                ticks.colour = "black",
+                                barheight = unit(2, units = "mm"),
+                                barwidth = unit(100, units = "mm"),
+                                draw.ulim = F,
+                                title.position = 'top',
+                                title.hjust = 0.5,
+                                label.hjust = 0.5)) +
+  geom_vline(aes(xintercept = as.Date(start)), linetype = "dashed") +
+  geom_vline(aes(xintercept = as.Date(end)), linetype = "dashed") +
+  geom_vline(aes(xintercept = as.Date(peak))) +
+  geom_hline(aes(yintercept = 37), alpha = 0.8, linetype = "dotted") +
+  geom_hline(aes(yintercept = 38), alpha = 0.8, linetype = "dotted") +
+  theme(legend.position = "bottom") +
+  labs(title = "Agulhas Current", subtitle = paste0(start, " to ", end),
+       x = NULL, y = "Latitude (°N)")
+}
+```
+
+```{r Hovmöller-plots}
+# 2014-03-01 2014-03-24 2014-04-29
+hov.plt(hov1, top.ev[1, 1], top.ev[1, 2], top.ev[1, 3]) + labs(subtitle = paste(top.ev[1, 2]))
+ggplot2::ggsave(paste0("../Kuroshio_Current/KC_Hovmöller_", top.ev[1, 2], ".png"),
+                width = 5, height = 3.5, units = "cm", dpi = "retina", scale = 2.8)
+
+# 2014-11-23 2014-12-21 2015-02-24
+hov.plt(hov2, top.ev[2, 1], top.ev[2, 2], top.ev[2, 3]) + labs(subtitle = paste(top.ev[2, 2]))
+ggplot2::ggsave(paste0("../Kuroshio_Current/KC_Hovmöller_", top.ev[2, 2], ".png"),
+                width = 5, height = 3.5, units = "cm", dpi = "retina", scale = 2.8)
+
+# 2018-03-05 2018-04-05 2018-05-02
+hov.plt(hov3, top.ev[3, 1], top.ev[3, 2], top.ev[3, 3]) + labs(subtitle = paste(top.ev[3, 2]))
+ggplot2::ggsave(paste0("../Kuroshio_Current/KC_Hovmöller_", top.ev[3, 2], ".png"),
+                width = 5, height = 3.5, units = "cm", dpi = "retina", scale = 2.8)
+```
+
+```{r sst-anomaly-subset}
+sst.ev1 <- sst %>%
+  dplyr::filter(t == top.ev[1, 2])
+
+sst.ev2 <- sst %>%
+  dplyr::filter(t == top.ev[2, 2])
+
+sst.ev3 <- sst %>%
+  dplyr::filter(t == top.ev[3, 2])
+```
+
+```{r sst-anomaly-plot-function}
+sst.plot <- function(sst.dat, bathy.dat, plot.parameters) {
+  fig <- ggplot(sst.dat, aes(x = lon, y = lat)) +
+    geom_raster(aes(fill = (temp - seas)), interpolate = FALSE) +
+    scale_fill_gradientn(colours = col1, limits = c(-6.5, 6.5)) +
+    stat_contour(data = bathy.dat, aes(x = lon, y = lat, z = z, alpha = ..level..),
+                 col = "black", size = 0.15, binwidth = 500) +
+    scale_alpha_continuous(range = c(0.2, 0.9)) +
+    guides(alpha = "none",
+           fill = guide_colourbar(title = "SST anomaly (°C)",
+                                  frame.colour = "black",
+                                  frame.linewidth = 0.5,
+                                  ticks.colour = "black",
+                                  barheight = unit(2, units = "mm"),
+                                  barwidth = unit(100, units = "mm"),
+                                  draw.ulim = F,
+                                  title.position = 'top',
+                                  title.hjust = 0.5,
+                                  label.hjust = 0.5)) +
+    theme_map() +
+    plot.parameters
+  return(fig)
+}
+```
+
+```{r sst-anomaly-plot}
+sst.plot(sst.ev1, bathy_KC, KC.layers) + labs(subtitle = paste(top.ev[1, 2]))
+ggplot2::ggsave(paste0("../Kuroshio_Current/KC_SST_anom_map_", top.ev[1, 2], ".pdf"),
+                width = 7.0 * (1/3), height = 5 * (1/3), scale = 3.5)
+
+sst.plot(sst.ev2, bathy_KC, KC.layers) + labs(subtitle = paste(top.ev[2, 2]))
+ggplot2::ggsave(paste0("../Kuroshio_Current/KC_SST_anom_map_", top.ev[2, 2], ".pdf"),
+                width = 7.0 * (1/3), height = 5 * (1/3), scale = 3.5)
+
+sst.plot(sst.ev3, bathy_KC, KC.layers) + labs(subtitle = paste(top.ev[3, 2]))
+ggplot2::ggsave(paste0("../Kuroshio_Current/KC_SST_anom_map_", top.ev[3, 2], ".pdf"),
+                width = 7.0 * (1/3), height = 5 * (1/3), scale = 3.5)
+```
+
+```{r chl-a-plot}
+# read in monthly MODIS chl-a ---------------------------------------------
+
+csvDir <- "/Volumes/Benguela/spatial/processed/MODIS-Aqua_Chlorophyll_Concentration_OCI_Algorithm/WBC/subregions"
+chl <- fread(paste0(csvDir, "/all-sub-MODIS-Aqua-20020705-20181118.csv"))
+
+cols <- rep(c("red3", "blue3", "green4"), 3)
+
+chlor_a <- chl %>%
+  dplyr::filter(region == "KC") %>% 
+  dplyr::filter(time >= "2014-01-01") %>% 
+  mutate(time = fastDate(time)) %>%
+  mutate(location = fct_recode(ID,
+                               "current" = "sub1",
+                               "current" = "sub2",
+                               "current" = "sub3",
+                               "reference" = "sub4",
+                               "reference" = "sub5",
+                               "reference" = "sub6",
+                               "event" = "sub7",
+                               "event" = "sub8",
+                               "event" = "sub9")) %>% 
+  dplyr::select(-region)
+
+ggplot(chlor_a, aes(x = time, y = chlor_a, group = location)) +
+  geom_line(aes(colour = ID, group = ID), alpha = 0.7, size = 0.4) +
+  scale_color_manual(values = cols) +
+  scale_y_continuous(trans = 'log10') +
+  guides(alpha = "none", colour = "none") +
+  facet_wrap(~ location, nrow = 3) + theme_minimal()
+```
+
+```{r}
+# making lookup table for finding a season that a particular date belongs to;
+# note: I account for a leap year...
+d <- function(month_day) which(lut$month_day == month_day)
+lut <- data.frame(all_dates = as.POSIXct("2012-1-1") + ((0:365) * 3600 * 24),
+                 season = NA)
+lut <- within(lut, { month_day = strftime(all_dates, "%b-%d") })
+lut[c(d("Jan-01"):d("Mar-20"), d("Dec-21"):d("Dec-31")), "season"] = "winter"
+lut[c(d("Mar-21"):d("Jun-20")), "season"] = "spring"
+lut[c(d("Jun-21"):d("Sep-20")), "season"] = "summer"
+lut[c(d("Sep-21"):d("Dec-20")), "season"] = "autumn"
+rownames(lut) = lut$month_day
+
+chlor_a <- within(chlor_a, { 
+  season = lut[strftime(time, "%b-%d"), "season"] 
+ })
+
+# for "current", "event", and "reference" areas, extract the chl-a concentrations during times corresponding to MHWs and compare graphically with chl-a concentrations during times not coinciding with MHWs...
+
+events.present <- events.long %>% 
+  dplyr::filter(event == TRUE) %>% 
+  dplyr::select(t)
+events.absent <- events.long %>% 
+  dplyr::filter(event == FALSE) %>% 
+  dplyr::select(t)
+
+aov.fun <- function(data) {
+  require(nlme)
+  A <- data %>% 
+    dplyr::filter(time %in% events.present$t) %>% 
+    dplyr::mutate(presence = "yes")
+  B <- data %>% 
+    dplyr::filter(time %in% events.absent$t) %>% 
+    dplyr::mutate(presence = "no")
+  dat <- rbind(A, B)
+  # return(t.test(A$chlor_a, B$chlor_a, na.rm = TRUE))
+  mod <- aov(chlor_a ~ presence * season, data = dat)
+  out <- summary(mod)
+  return(out)
+}
+
+dlply(chlor_a, .(location), aov.fun)
+```
+
+```{r}
+box.fun <- function(data) {
+  require(nlme)
+  A <- data %>% 
+    dplyr::filter(time %in% events.present$t) %>% 
+    dplyr::mutate(presence = "yes")
+  B <- data %>% 
+    dplyr::filter(time %in% events.absent$t) %>% 
+    dplyr::mutate(presence = "no")
+  dat <- rbind(A, B)
+  
+  library(ggpubr)
+  out <- ggplot(dat, aes(x = season, y = chlor_a)) +
+    geom_boxplot(aes(colour = presence), notch = TRUE) +
+    facet_wrap(~location) +
+    scale_y_continuous(trans = 'log10') + theme_minimal()
+  return(out)
+}
+
+box.fun(chlor_a)
+```
+
+
+
+# extract data along 295°E (30°N to 43°N)
+sst.ev1.ts <- sst.ev1 %>%
+  dplyr::filter(lon == 295.125) %>%
+  dplyr::filter(lat >= 30 & lat <= 43)
+
+sst.ev2.ts <- sst.ev2 %>%
+  dplyr::filter(lon == 295.125) %>%
+  dplyr::filter(lat >= 30 & lat <= 43)
+
+# plot SST transect
+ggplot(data = sst.ev1.ts, aes(x = lat, y = anom)) +
+  geom_line(aes(y = clim - mean(clim)), colour = "green3", size = 0.8) +
+  geom_line(size = 0.8) +
+  geom_line(data = sst.ev2.ts, aes(x = lat, y = anom), size = 0.8, linetype = "dashed")
+# make a similar plot as above, but outside of heatwave events?

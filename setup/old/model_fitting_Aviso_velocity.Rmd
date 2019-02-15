@@ -1,0 +1,670 @@
+---
+title: "Model fitting (Aviso+) - velocity"
+author:
+  - affiliation: University of the Western Cape
+name: AJ Smit
+date: "26 February 2017"
+output:
+  bookdown::html_document2:
+    fig_caption: yes
+    fig_retina: 2
+    fig_width: 7
+    highlight: espresso
+    theme: sandstone
+    toc_float: no
+  html_document:
+    fig_caption: yes
+    fig_retina: 2
+    fig_width: 7
+    highlight: espresso
+    theme: sandstone
+    toc_float: no
+  bookdown::pdf_document2:
+    fig_caption: yes
+    fig_height: 6.5
+    fig_width: 6.5
+    highlight: default
+    keep_tex: yes
+    latex_engine: xelatex
+    template: /Users/ajsmit/Dropbox/repos/templates/template-article_ajs.tex
+  word_document:
+    fig_caption: yes
+    fig_height: 7
+    fig_width: 7
+    highlight: zenburn
+    toc: no
+fontsize: 10pt
+geometry: margin=1in
+language: Australian
+mainfont: Minion Pro
+monofont: Myriad Pro
+csl: /Users/ajsmit/Dropbox/repos/csl/plos.csl
+papersize: A4
+sansfont: Myriad Pro
+tables: yes
+bibliography: /Users/ajsmit/Dropbox/repos/bibliography/bibliography.bib
+---
+
+```{r global_options, include = FALSE}
+knitr::opts_chunk$set(include = FALSE, echo = FALSE, warning = FALSE,
+                      message = FALSE, tidy = FALSE, cache = TRUE,
+                      fig.align = 'left', fig.show = 'hold',
+                      fig.path = 'figures/velocity-')
+```
+
+```{r load-pkg, include = FALSE}
+library(RmarineHeatWaves)
+library(data.table)
+library(plyr)
+library(tidyverse)
+library(lubridate)
+library(forcats)
+library(mgcv)
+library(broom)
+library(doMC); doMC::registerDoMC(cores = 4)
+library(ggpubr)
+# theme_set(grey_update2)
+source("functions.R")
+```
+
+```{r}
+theme_set(theme_grey())
+grey_update2 <- theme_grey() +
+  theme(panel.grid.major = element_line(size = 0.2, linetype = 2),
+        panel.grid.minor = element_line(colour = NA))
+theme_set(grey_update2) # Set theme
+```
+
+
+# Some functions
+```{r fast-date-fun}
+# a fast date function
+fastDate <- function(x, tz = NULL) {
+  require(fasttime)
+  as.Date(fastPOSIXct(x, tz = tz))
+}
+
+source("/Users/ajsmit/Dropbox/repos/Ocean_MHW/Changing_nature_of_ocean_heat/functions/models.R")
+```
+
+# Import the data and set-up
+
+## Import and make whole
+
+```{r data-setup}
+# Import the data and set-up ----------------------------------------------
+
+sl.in <- as.tibble(fread("/Volumes/Benguela/spatial/processed/Aviso+/WBC/subregions/all-sub-summarised-Aviso+-19930101-20170515.csv"))
+sl <- sl.in %>%
+  dplyr::mutate(t = fastDate(time)) %>%
+  dplyr::select(-time) %>%
+  dplyr::mutate(
+  location = fct_recode(
+  ID,
+  "in" = "sub1",
+  "in" = "sub2",
+  "in" = "sub3",
+  "out" = "sub4",
+  "out" = "sub5",
+  "out" = "sub6"
+  )
+  ) %>%
+  dplyr::mutate(
+  velocity = sqrt(vgos ^ 2) + (ugos ^ 2),
+  eke = 0.5 * (ugos ^ 2 + vgos ^ 2),
+  arrow_size = ((abs(ugos * vgos) / max(abs(ugos * vgos))) + 0.3) / 6
+  )
+
+remove(sl.in)
+```
+
+To calculate later:
+
+Perhaps the EKE 'events' do not increase, but the total (or mean) amount of EKE (et al.) per annum increases. To test, do the following regressions:
+
+* variance per annum
+* mean EKE per annum
+* mean U 
+* mean V per annum
+* mean velocity per annum
+
+## Detect events and calculate the climatologies
+
+The climatology created here will be subtracted from the daily data in order to create a daily time series from which the season had been removed (termed 'de-seasoned'). The events will be used for various other analyses and plotting options, as we shall see below.
+
+```{r make-MHW-fun, include=TRUE, echo=TRUE}
+# daily data - make whole
+sl.d <- as.tibble(ddply(sl, .(region, location), 
+                        function(df) { make_whole(df, x = t, y = velocity) },
+                        .parallel = TRUE)) %>%
+  dplyr::group_by(region, location) %>%
+  nest()
+
+# create functions to detect events and produce climatologies for each of the
+# regions and 'in' and 'out' groups
+# for this to work we need RmarineHeatWaves v.0.16.0 installed
+detect.ev <- function(sl) {
+  out <- RmarineHeatWaves::detect(sl, x = t, y = velocity, min_duration = 5, 
+                                  max_gap = 2, cold_spells = FALSE,
+                                  climatology_start = "1993-01-01", 
+                                  climatology_end = "2016-12-31")
+  x <- out$event
+  return(x)
+  }
+
+make.clm <- function(sl) {
+  out <- RmarineHeatWaves::detect(sl, x = t, y = velocity, min_duration = 5,
+                                  max_gap = 2, cold_spells = FALSE,
+                                  climatology_start = "1993-01-01",
+                                  climatology_end = "2016-12-31")
+  x <- out$clim[, 1:5]
+  return(x)
+}
+
+# apply the functions to each of the regions and 'in' and 'out' groups
+ev.raw <- sl.d %>%
+  dplyr::mutate(ev.raw = map(data, detect.ev)) %>%
+  unnest(ev.raw)
+
+clm <- sl.d %>%
+  dplyr::mutate(clm = map(data, make.clm)) %>%
+  unnest(clm)
+```
+
+## Prepare de-seasoned daily data
+One option would be to fit models directly to the daily data. Here I have decided to not use the 'raw' daily data, but rather a daily time series from which the seasonal climatology had been subtracted. In this way the fluctuations due to inter-annual variability will be emphasised. The climatology produced above (`clm`) is a tibble of the same length as the original daily data fed to it. It contains the eddy kinetic energy (`eke`) and has columns added to contain the climatologies for the seasonally fluctuating cycle and the seasonally fluctuating threshold. This is what it looks like:
+
+```{r clm-head, include=TRUE}
+head(clm, 2)
+```
+
+To prepare the de-seasoned daily data (called `de.seas` in the tibble), I subtract the seasonally varying climatological mean from the daily eddy kinetic energy. For each region and location, I also choose to calculate a zero-centered eddy kinetic energy (`anom`), which is as simple as substracting the mean `eke` from the daily values. Since fitting the GAMs and GAMMs is easier to do with a daily sequence of integers rather than the dates themselves, I also produce a sequence of numbers to be used as the independent variable in model fitting later on. Lastly, I `nest()` the data as this makes it very easy to fit stratified models using **purrr**'s `map()` function.
+
+```{r climatology-nest, include=TRUE, echo=TRUE}
+# prepare a nested tibble with a column containing the 'de-seasoned' data and
+# region-specific anomalies
+daily.dat <- clm %>%
+  mutate(de.seas = velocity - seas_clim_year) %>%
+  group_by(region, location) %>%
+  mutate(anom = velocity - mean(velocity, na.rm = TRUE),
+         num = seq(1:length(velocity))) %>%
+  nest()
+```
+
+## Prepare monthly data
+First I need to calculate the monthly seasonal trend to remove from the monthly data. Rather than using a GAM to produce a seasonal climatology, I use the one already made by **RmarineHeatWaves** `detect()`. I simply average these within each month of the year. A consequence of doing this is that I now do not have to account for a cyclic seasonal component in the GAMs or GAMMs using a cyclic cubic spline, as seasonality has now entirely been removed. As before, the models fitted to the monthly data will focus on the longer-term variations remaining within the data (visually these will be very evident now, as we do not have the seasonal component present to obscure these patterns). 
+
+```{r seasonal-climatological-anomaly, include=TRUE, echo=TRUE}
+monthly.dat <- daily.dat %>%
+  unnest(data) %>%
+  dplyr::mutate(t = floor_date(t, unit = "month")) %>%
+  dplyr::mutate(year = year(t)) %>%
+  dplyr::mutate(time = as.numeric(t) / 1000) %>%
+  dplyr::group_by(region, location, t) %>%
+  dplyr::summarise(velocity = mean(velocity, na.rm = TRUE),
+                   seas_clim_year = mean(seas_clim_year, na.rm = TRUE),
+                   thresh_clim_year = mean(thresh_clim_year, na.rm = TRUE),
+                   de.seas = mean(de.seas, na.rm = TRUE),
+                   anom = mean(anom, na.rm = TRUE)) %>% 
+  dplyr::group_by(region, location) %>%
+  dplyr::mutate(de.seas2 = velocity - seas_clim_year,
+                nMonth = month(t)) %>% 
+  dplyr::mutate(num = seq(1:length(velocity))) %>%
+  na.omit() %>% 
+  nest()
+```
+
+# Model fitting
+Now we fit various flavours of Generalised Additive Models (GAMs) and Generalised Additive Mixed Models (GAMMs). I will account for serial dependence of the residuals using autoregressive parameters. 
+
+1. fitting a GAM to the 'raw' data;
+2. fit GAM to de-seasoned data (raw minus climatology);
+3. plot them all.
+
+## GAMs
+
+There are pros and cons to GAMs:
+
+* they do not account for autocorrelated residuals; to account for autocorrelation, there are two options: i) fit a GAMM, or ii) fit a GLS null model that accounts for the AR structure of choice, and then fit a GAM to the residuals as usual --- the residuals will contain the full signal of the raw data, but will no longer be autocorrelated;
+* a linear decal trend (°C/dec) cannot be estimated, but if this is desired, a linear model such as the GLS with AR error term may be fitted;
+* they can highlight some non-linear local features.
+
+### Fit a GAM to the raw daily data
+
+This is a plain vanilla GAM fitted to the raw daily data. Autocorrelation is not modelled, and seasonality is still present in the data.
+
+Notice how for all the currents, the eddy kinetic energy is higher inside the currents than outside of them. The Agulhas Current, Kuroshio Current and the Gulf Stream have a far higher eddy kinetic energy than the East Australian and Brazil Currents. The variability in eddy kinetic energy inside the currents is also greater in the eddy compared to around the eddies' periphery. Local features (i.e. localised non-linearities) are more prevalent inside the eddies compared to outside of them, and in one case (the Kuroshio Current), there is also a continuous significant long term trend in increasing eddy kinetic energy (see a later section for evidence of this).
+
+```{r gam.1, echo = TRUE, include = TRUE}
+# function for GAM to fit to raw daily data
+# setting k = 20 ensures a good visual fit of the line
+gam.fun1 <- function(df) {
+  gam(velocity ~ s(num, k = 20), data = df)
+}
+
+# fit models and add output into new columns
+gam.1 <- daily.dat %>%
+  dplyr::mutate(mod.gam = map(data, gam.fun1),
+                out = map2(mod.gam, data, ~ augment(.x))) %>% 
+  unnest(data, out)
+
+theme_set(grey_update2)
+gam.1 %>%
+  ggplot(aes(x = t, y = velocity, group = location)) +
+  geom_hline(aes(yintercept = 0), size = 0.2, colour = "grey50") +
+  geom_line(aes(colour = location), size = 0.1, alpha = 0.8) +
+  geom_line(aes(y = .fitted, colour = location), alpha = 1.0, size = 0.75) +
+  facet_grid(region ~ .) +
+  scale_x_date(limits = as.Date(c("1981-09-01", "2017-10-19"))) +
+  scale_colour_manual(values = c("red3", "blue3")) +
+  labs(x = "Date", y = "Velocity (m/s)",
+       title = "GAM -- daily raw data")
+# ggplot2::ggsave("../figures/Fig13_dailyGam.pdf", width = 8.25, height = 5, scale = 1.1)
+```
+
+### Fit a GAM with cyclical component to raw daily data
+
+### Fit a GAM to the de-seasoned daily data
+
+This GAM is fitted to the daily data from which the seasonal climatology had been removed. We see here now how the remaining variability is related to some process that does not follow a cyclical seasonal periodicity (there is much less variability overall), but the underlying non-linear trends are the same as when the model was fitted to the raw daily data. The difference between this plot and the one for the raw data is that the time series are now all centered on zero, but the eddy kinetic energy is actually still higher inside the currents than outside of them (to know the difference, calculate the overall mean for all the raw data inside and compare to outside).
+
+```{r gam.3a, echo = TRUE, include = TRUE}
+# function for GAM to fit to de-seasoned daily data
+# setting k = 20 ensures a good visual fit of the line
+gam.fun3 <- function(df) {
+  gam(de.seas ~ s(num, k = 20), data = df)
+}
+
+# fit models and add output into new columns
+gam.3 <- daily.dat %>%
+  dplyr::mutate(mod.gam = map(data, gam.fun3),
+                out = map2(mod.gam, data, ~ augment(.x))) %>% 
+  unnest(data, out)
+
+theme_set(grey_update2)
+gam.3 %>%
+  ggplot(aes(x = t, y = de.seas, group = location)) +
+  geom_hline(aes(yintercept = 0), size = 0.2, colour = "grey50") +
+  geom_line(aes(colour = location), size = 0.1, alpha = 0.8) +
+  geom_line(aes(y = .fitted, colour = location), alpha = 1.0, size = 0.75) +
+  facet_grid(region ~ .) +
+  scale_x_date(limits = as.Date(c("1981-09-01", "2017-10-19"))) +
+  scale_colour_manual(values = c("red3", "blue3")) +
+  labs(x = "Date", y = "Velocity, zero centered (m/s)",
+       title = "GAM -- daily de-seasoned data")
+# ggplot2::ggsave("../figures/Fig13_dailyGam.pdf", width = 8.25, height = 5, scale = 1.1)
+```
+
+### Fit a GAM to the de-seasoned and detrended daily data
+
+Now even the non-linear signal is gone, and all we see is the variability that was not captured by the previous GAM. We see that the samples taken inside the currents have the greatest variance. 
+
+```{r gam.3b, echo = TRUE, include = TRUE}
+# the detrended daily data
+theme_set(grey_update2)
+gam.3 %>%
+  ggplot(aes(x = t, y = .resid, group = location)) +
+  geom_hline(aes(yintercept = 0), size = 0.2, colour = "grey50") +
+  geom_line(aes(colour = location), size = 0.1, alpha = 0.8) +
+  facet_grid(region ~ .) +
+  scale_x_date(limits = as.Date(c("1981-09-01", "2017-10-19"))) +
+  scale_colour_manual(values = c("red3", "blue3")) +
+  labs(x = "Date", y = "Velocity, zero centered (m/s)",
+       title = "GAM -- daily de-seasoned and detrended data")
+# ggplot2::ggsave("../figures/Fig13_dailyGam.pdf", width = 8.25, height = 5, scale = 1.1)
+```
+
+```{r}
+sl.d2 <- gam.3 %>%
+  dplyr::select(region, location, doy, t, .resid) %>%
+  dplyr::rename(velocity = .resid) %>%
+  dplyr::group_by(region, location) %>%
+  nest()
+
+ev.de.seas <- sl.d2 %>%
+  dplyr::mutate(ev = map(data, detect.ev)) %>%
+  unnest(ev)
+```
+
+## Monthly, GAM
+
+```{r gam.4, echo = TRUE, include = TRUE}
+# function for GAM to fit to raw daily data
+# setting k = 20 ensures a good visual fit of the line
+gam.fun4 <- function(df) {
+  gam(de.seas ~ s(num, k = 20), data = df)
+}
+
+# fit models and add into new columns
+gam.df <- monthly.dat %>%
+  mutate(mod.gam = map(data, gam.fun4))
+
+gam.df <- gam.df %>%
+  mutate(predicted = map2(mod.gam, data, ~ augment(.x, newdata = .y))) %>%
+  unnest(predicted)
+
+gam.df %>%
+  # unnest(data, predict_gam) %>%
+  ggplot(aes(x = t, y = de.seas, group = location)) +
+  geom_hline(aes(yintercept = 0), size = 0.2, colour = "grey50") +
+  geom_line(aes(colour = location), size = 0.2, alpha = 0.8) +
+  geom_line(aes(y = .fitted, colour = location), alpha = 1.0, size = 0.55) +
+  facet_grid(region ~ .) +
+  scale_colour_manual(values = c("red3", "blue3")) +
+  scale_x_date(limits = as.Date(c("1981-09-01", "2017-10-19"))) +
+  labs(x = "Date", y = "Velocity, zero centered (m/s)",
+       title = "GAM -- monthly de-seasoned data")
+# ggplot2::ggsave("../figures/Fig13_dailyGam.pdf", width = 8.25, height = 5, scale = 1.1)
+```
+
+## Monthly de-seasoned, GAMM (AR1)
+
+There are two choices: i) using a correlation structure, `form = ~ 1|Year`, allows ARMA to be nested within each year; or ii) `form = ~ num`. The latter is slower but allows forcontinuity from year to year --- I'll use that here.
+
+Below is a GAMM (AR1). The fit seems visually unsatisfactory, but I will have to assess this formally. What is noteworthy, though, is the linear trends in increasing eddy kinetic energy that is visible in the Kuroshio Current.
+
+```{r gamm.1, echo = TRUE, include = TRUE}
+# a gamm function: AR1
+gamm.fun <- function(df) {
+  ctrl <- list(niterEM = 0, msVerbose = FALSE, optimMethod = "BFGS")
+  out <- gamm(de.seas ~ s(num, k = 20), data = df,
+              correlation = corCAR1(form = ~ num),
+              control = ctrl, verbosePQL = FALSE)
+  return(out$gam)
+}
+
+# fit the GAMM
+gamms.AR1 <- monthly.dat %>%
+  dplyr::mutate(mod.gamm = map(data, gamm.fun))
+
+# massage the thing into something useful
+fitted.AR1 <- as.data.frame(melt(mapply(function(x) gamms.AR1$mod.gamm[[x]]$fitted.values, 1:10))[3])
+gamms.AR1.df <- as.tibble(cbind(unnest(monthly.dat, data), fitted.AR1))
+gamms.AR1.df <- dplyr::rename(gamms.AR1.df, fitted = value)
+
+theme_set(grey_update2)
+gamms.AR1.df %>%
+  ggplot(aes(x = t, y = de.seas)) +
+  geom_hline(aes(yintercept = 0), size = 0.2, colour = "grey50") +
+  geom_line(aes(colour = location), size = 0.2, alpha = 1) +
+  geom_line(aes(y = fitted, colour = location), alpha = 1.0, size = 0.55) +
+  facet_grid(region ~ .) +
+  scale_colour_manual(values = c("red3", "blue3")) +
+  scale_x_date(limits = as.Date(c("1981-09-01", "2017-10-19"))) +
+  labs(x = "Date", y = "Velocity, zero centered (m/s)",
+       title = "Generalised Additive Mixed Model (AR1) -- monthly means")
+# ggplot2::ggsave("Changing_nature_of_ocean_heat/figures/Fig13_monthlyGAMM.pdf", width = 8.25, height = 5, scale = 0.8)
+```
+
+## GAM fitted to monthly data, de-seasoned and with AR1 error removed
+
+Considering the GAMM did not capture the local features the way I would have liked it to, I first remove the AR1 correlation from the time series using a GLS, and then fit a GAM to the residuals. For comparison, I also plot these same data after removing the trend captured by the GAM.
+
+```{r monthly-GAM, echo = TRUE, include = TRUE}
+# use a GLS null model (for trend) for this
+gls.fun <- function(df) {
+  out <- gls(de.seas ~ 1, data = df, method = "REML", correlation = corAR1(form = ~ num), na.action = na.omit)
+  return(out)
+}
+
+# a GAM to fit to the GLS's residuals
+gam.fun2 <- function(df) {
+  gam(de.seas.corr ~ s(num, k = 20), data = df)
+}
+
+# fit the GLS and keep the residuals
+gls.AR1 <- monthly.dat %>%
+  na.omit() %>% 
+  dplyr::mutate(mod.gls = map(data, gls.fun))
+
+# massage the thing into something useful and fit model
+residuals.AR1 <- as.data.frame(melt(mapply(function(x) 
+  gls.AR1$mod.gls[[x]]$residuals, 1:10))[3])
+gls.AR1.df <- as.tibble(cbind(unnest(monthly.dat, data), residuals.AR1))
+gam.df2 <- gls.AR1.df %>%
+  dplyr::rename(de.seas.corr = value) %>% 
+  dplyr::group_by(region, location) %>%
+  nest() %>% 
+  dplyr::mutate(mod.gam = map(data, gam.fun2)) %>% 
+  dplyr::mutate(out = map2(mod.gam, data, ~ augment(.x))) %>%
+  unnest(data, out)
+
+# plot the de-seasoned series from which the AR1 correlation structure had been removed
+plt.1a <- gam.df2 %>%
+  ggplot(aes(x = t, y = de.seas.corr, group = location)) +
+  # geom_vline(data = ev, aes(xintercept = date_start, colour = location), alpha = 0.1) +
+  geom_hline(aes(yintercept = 0), size = 0.2, colour = "grey50") +
+  geom_line(aes(colour = location), size = 0.15, alpha = 1) +
+  geom_rug(data = filter(ev.raw, location == "in"),
+           aes(x = date_start, y = int_max_abs), col = "red", sides = "b") +
+  geom_rug(data = filter(ev.raw, location == "out"),
+           aes(x = date_start, y = int_max_abs), col = "blue", sides = "t") +
+  # geom_line(aes(y = de.seas), colour = "black", size = 0.2, alpha = 0.6) +
+  geom_ribbon(aes(ymin = (.fitted - .se.fit), ymax = (.fitted + .se.fit), 
+                  fill = location), alpha = 0.7) +
+  # geom_line(aes(y = .fitted), colout = "black", alpha = 0.7, size = 0.55) +
+  facet_grid(region ~ .) +
+  scale_x_date(limits = as.Date(c("1981-09-01", "2017-10-19"))) +
+  # scale_y_continuous(limits = c(-4, 4), breaks = c(-3, 0, 3)) +
+  scale_colour_manual(values = c("red3", "blue3")) +
+  scale_fill_manual(values = c("red3", "blue3")) +
+  labs(x = "Date", y = "EKE, zero centered (m²/s²)") + guides(fill = FALSE)
+
+# plot plot the de-seasoned series, sans AR1 and trend
+plt.2a <- gam.df2 %>%
+  ggplot(aes(x = t, y = .resid, group = location)) +
+  # geom_vline(data = ev, aes(xintercept = date_start, colour = location), alpha = 0.1) +
+  geom_hline(aes(yintercept = 0), size = 0.2, colour = "grey50") +
+  geom_line(aes(colour = location), size = 0.15, alpha = 1) +
+  geom_rug(data = filter(ev.de.seas, location == "in"),
+           aes(x = date_start, y = int_max_abs), col = "red", sides = "b") +
+  geom_rug(data = filter(ev.de.seas, location == "out"),
+           aes(x = date_start, y = int_max_abs), col = "blue", sides = "t") +
+  facet_grid(region ~ .) +
+  scale_x_date(limits = as.Date(c("1981-09-01", "2017-10-19"))) +
+  # scale_y_continuous(limits = c(-4, 4), breaks = c(-3, 0, 3)) +
+  scale_colour_manual(values = c("red3", "blue3")) +
+  labs(x = "Date", y = "EKE, zero centered (m²/s²)")
+```
+
+Before I plot the GAMs, I also count the number of events per annum for the monthly de-seasoned data sans AR1 error, and for its detrended counterpart, and calculate and plot linear regressions to see if there are trends in the number of events.
+
+```{r event-trends, echo = TRUE, include = TRUE}
+ev.raw <- ev.raw %>%
+  dplyr::mutate(trt = rep("trend", length(date_start)))
+ev.de.seas <- ev.de.seas %>%
+  dplyr::mutate(trt = rep("detrend", length(date_start)))
+ev.combined <- rbind(ev.raw, ev.de.seas)
+
+# calculte the number of events per annum
+ev.cnt <- ev.combined %>%
+  dplyr::mutate(year = year(date_start)) %>%
+  dplyr::select(-date_start, -date_stop, -date_peak) %>%
+  dplyr::group_by(region, location, trt, year) %>%
+  dplyr::summarise(y = n()) %>%
+  dplyr::group_by(region, location, trt) %>%
+  nest()
+
+linFun <- function(annualEvent, poissan = FALSE) {
+  if (poissan)
+    mod <- glm(y ~ year, family = poisson(link = "log"),
+               data = annualEvent)
+  else
+    mod <- lm(y ~ year, data = annualEvent)
+  return(mod)
+}
+
+# fit models and add into new columns
+ev.mod <- ev.cnt %>%
+  dplyr::mutate(mod.ev = map(data, linFun))
+
+ev.1.param <- ev.mod %>%
+  dplyr::mutate(out = map(mod.ev, glance)) %>%
+  unnest(out)
+
+ev.1 <- ev.mod %>%
+  dplyr::mutate(out = map2(mod.ev, data, ~ augment(.x))) %>%
+  unnest(data, out)
+
+plt.1b <- ev.1 %>% 
+  filter(trt == "trend") %>% 
+  ggplot(aes(x = year, y = y)) +
+  geom_point(aes(colour = location), size = 0.4) +
+  geom_line(aes(y = .fitted, colour = location)) +
+  facet_grid(region ~ .) +
+  scale_colour_manual(values = c("red3", "blue3")) +
+  scale_y_continuous(breaks = c(0, 5, 10)) +
+  labs(x = "Date", y = "Count") + theme(legend.position = "right")
+
+plt.2b <- ev.1 %>% 
+  filter(trt == "detrend") %>% 
+  ggplot(aes(x = year, y = y)) +
+  geom_point(aes(colour = location), size = 0.4) +
+  geom_line(aes(y = .fitted, colour = location)) +
+  facet_grid(region ~ .) +
+  scale_colour_manual(values = c("red3", "blue3")) +
+  scale_y_continuous(breaks = c(0, 5, 10)) +
+  labs(x = "Date", y = "Count") + theme(legend.position = "right")
+```
+
+```{r, include = TRUE}
+ggarrange(plt.1a + theme(legend.position = 'none'),
+          plt.1b, labels = "AUTO", ncol = 2,
+          align = 'v')
+```
+
+```{r, include = TRUE}
+ggarrange(plt.2a + theme(legend.position = 'none'),
+          plt.2b, labels = "AUTO", ncol = 2,
+          align = 'hv')
+```
+
+## The final GAM, with confidence intervals etc.
+
+Now I'll make plots of the fitten GAMs (i.e. the final model, which is the one *sans* the season and the AR1 error), with local areas where significant change have happened indicated.
+
+```{r, include = TRUE, fig.height = 7, fig.width = 7}
+source("/Volumes/GoogleDrive/My Drive/repos/misc_R/Gavin_Simpson/derivFun.R")
+
+# The next revision of the code must be a simultaneous interval for the spline:
+# https://www.fromthebottomoftheheap.net/2016/12/15/simultaneous-interval-revisited/
+
+# I used the 'raw' monthly data because the derive function expects the whole
+# model ('gam' + 'lme' parts), which does not get calculated when I do it through broom
+sigSlope <- function(df, mod) {
+  want <- seq(1, length(mod$fitted.values), length.out = 200)
+  pdat <- with(df, data.frame(num = num[want], t = t[want], nMonth = nMonth[want]))
+  p2 <- predict(mod, newdata = pdat, type = "terms", se.fit = TRUE)
+  pdat$p2 <- as.vector(p2$fit)
+  pdat$se2 <- as.vector(p2$se.fit)
+  df.res <- df.residual(mod)
+  crit.t <- qt(0.025, df.res, lower.tail = FALSE)
+  pdat$upper <- pdat$p2 + (crit.t * pdat$se2)
+  pdat$lower <- pdat$p2 - (crit.t * pdat$se2)
+  Term <- "num"
+  d <- Deriv(mod)
+  dci <- confint(d, term = Term)
+  dsig <- signifD(pdat$p2, d = d[[Term]]$deriv, dci[[Term]]$upper, dci[[Term]]$lower)
+  pdat$incr <- dsig$incr
+  pdat$decr <- dsig$decr
+  return(pdat)
+  }
+
+region <- "AC"
+
+makePred <- function(region) {
+  x <- gam.df2[gam.df2$region == region, ]
+  in.gam <- gam(de.seas.corr ~ s(num, k = 20), data = filter(x, location == "in"))
+  out.gam <- gam(de.seas.corr ~ s(num, k = 20), data = filter(x, location == "out"))
+  in.pred <- sigSlope(filter(x, location == "in"), in.gam)
+  in.pred$region <- rep(region, nrow(in.pred))
+  in.pred$location <- rep("in", nrow(in.pred))
+  out.pred <- sigSlope(filter(x, location == "out"), out.gam)
+  out.pred$region <- rep(region, nrow(in.pred))
+  out.pred$location <- rep("out", nrow(in.pred))
+  pred <- rbind(in.pred, out.pred)
+  ll <- list(data = x, predicted = pred)
+  return(ll)
+}
+
+theme_set(grey_update2)
+
+AC.pred <- makePred("AC")
+
+AC <- ggplot(data = AC.pred$predicted, aes(x = t, group = location)) +
+  geom_line(data = AC.pred$data, aes(x = t, y = de.seas.corr, colour = location),
+            size = 0.2, show.legend = FALSE) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "grey70", alpha = 0.7, show.legend = FALSE) +
+  geom_hline(aes(yintercept = 0), colour = "black", linetype = "dotted") +
+  geom_line(aes(y = incr), colour = "black", size = 0.5) +
+  geom_line(aes(y = decr), colour = "black", size = 0.5) +
+  facet_grid(location ~ .) +
+  scale_x_date(limits = as.Date(c("1981-09-01", "2017-10-19"))) +
+  scale_color_manual(values = c("red3", "blue3")) +
+  labs(x = "Date", y = "Temp. anom. (°C)") + ggtitle("Agulhas Current")
+
+BC.pred <- makePred("BC")
+
+BC <- ggplot(data = BC.pred$predicted, aes(x = t, group = location)) +
+  scale_x_date(limits = as.Date(c("1981-09-01", "2017-10-19"))) +
+  geom_line(data = BC.pred$data, aes(x = t, y = de.seas.corr, colour = location),
+            size = 0.2, show.legend = FALSE) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "grey70", alpha = 0.7, show.legend = FALSE) +
+  geom_hline(aes(yintercept = 0), colour = "black", linetype = "dotted") +
+  geom_line(aes(y = incr), colour = "black", size = 0.5) +
+  geom_line(aes(y = decr), colour = "black", size = 0.5) +
+  facet_grid(location ~ .) +
+  scale_color_manual(values = c("red3", "blue3")) +
+  labs(x = "Date", y = "Temp. anom. (°C)") + ggtitle("Brazil Current")
+
+EAC.pred <- makePred("EAC")
+
+EAC <- ggplot(data = EAC.pred$predicted, aes(x = t, group = location)) +
+  scale_x_date(limits = as.Date(c("1981-09-01", "2017-10-19"))) +
+  geom_line(data = EAC.pred$data, aes(x = t, y = de.seas.corr, colour = location),
+            size = 0.2, show.legend = FALSE) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "grey70", alpha = 0.7, show.legend = FALSE) +
+  geom_hline(aes(yintercept = 0), colour = "black", linetype = "dotted") +
+  geom_line(aes(y = incr), colour = "black", size = 0.5) +
+  geom_line(aes(y = decr), colour = "black", size = 0.5) +
+  facet_grid(location ~ .) +
+  scale_color_manual(values = c("red3", "blue3")) +
+  labs(x = "Date", y = "Temp. anom. (°C)") + ggtitle("East Australian Current")
+
+KC.pred <- makePred("KC")
+
+KC <- ggplot(data = KC.pred$predicted, aes(x = t, group = location)) +
+  scale_x_date(limits = as.Date(c("1981-09-01", "2017-10-19"))) +
+  geom_line(data = KC.pred$data, aes(x = t, y = de.seas.corr, colour = location),
+            size = 0.2, show.legend = FALSE) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "grey70", alpha = 0.7, show.legend = FALSE) +
+  geom_hline(aes(yintercept = 0), colour = "black", linetype = "dotted") +
+  geom_line(aes(y = incr), colour = "black", size = 0.5) +
+  geom_line(aes(y = decr), colour = "black", size = 0.5) +
+  facet_grid(location ~ .) +
+  scale_color_manual(values = c("red3", "blue3")) +
+  labs(x = "Date", y = "Temp. anom. (°C)") + ggtitle("Kuroshio Current")
+
+GS.pred <- makePred("GS")
+
+GS <- ggplot(data = GS.pred$predicted, aes(x = t, group = location)) +
+  scale_x_date(limits = as.Date(c("1981-09-01", "2017-10-19"))) +
+  geom_line(data = GS.pred$data, aes(x = t, y = de.seas.corr, colour = location),
+            size = 0.2, show.legend = FALSE) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "grey70", alpha = 0.7, show.legend = FALSE) +
+  geom_hline(aes(yintercept = 0), colour = "black", linetype = "dotted") +
+  geom_line(aes(y = incr), colour = "black", size = 0.5) +
+  geom_line(aes(y = decr), colour = "black", size = 0.5) +
+  facet_grid(location ~ .) +
+  scale_color_manual(values = c("red3", "blue3")) +
+  labs(x = "Date", y = "Temp. anom. (°C)") + ggtitle("Gulf Stream")
+
+ggarrange(AC + rremove("x.title") + rremove("y.title"),
+          BC + rremove("x.title") + rremove("y.title"),
+          EAC + rremove("x.title"),
+          KC + rremove("y.title"),
+          GS + rremove("y.title"),
+          nrow = 3, ncol = 2,
+          align = "hv")
+```
+

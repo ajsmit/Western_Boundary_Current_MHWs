@@ -1,0 +1,114 @@
+# NOTE: As with all function that need to read a large number of netCDF files
+# from disk, the function executes a lot faster if the files reside on the local
+# disk; the I/O bottleneck between external hard drives and the CPU is severe.
+
+Herewith a list of files:
+
+1.1.makeBathy.R:
+create bythemetry from the GEBCO_2014_Grid data for the five WBC regions
+
+1.2.makeGrid.R:
+don't remember what this does
+
+1.3.makeShore.R:
+create shorelines fro the Global Self-consistent Hierarchical High-resolution
+Geography, GSHHG for the five WBC regions
+
+2.1.OISST_netCDF2csv.R:
+prepare a CSV file from the OISST netCDFs
+
+2.2.Aviso+_netCDF2csv.R:
+prepare a CSV file from the Aviso+ netCDFs
+
+3.0.MODIS_extract+regrid2CSV_raster_method.R:
+extracting the MODIS Aqua chlorophyll-a concentration data, and regridding it
+
+4.1.OISST_monthlySSTTrend.R:
+calculate the decadal trend in SST from monthly OISST data
+
+4.2.Aviso+_monthlyVelocityTrend.R:
+calcualte a decadal trend in current velocity from monthly Aviso+ data
+
+4.3.Aviso+_monthlyEKETrend.R:
+calcualte a decadal trend in eddy kinetic energy from monthly Aviso+ data
+
+4.4.Aviso+_overallMean.R:
+calculate the overall mean surface current velocity for the visualization of the
+mean current trajectory
+
+4.5.MODIS_Aqua_monthlyChlTrendTrend.R:
+calculate the trend in MODIS Aqua chl-a... not yet working due large amount of NAs
+
+5.1.makeClimatology.R:
+calculate the long climatologies from the OISST CSV data for the five WBC regions
+(i.e. same length as time series, for use in event detection)
+
+5.2.makeEvents.R:
+calculate the marine heat wave events from the OISST climatologies for the five
+WBC regions
+
+5.3.makeClimatology_short.R
+make short annula cycle (365-day) climatologies from the OISST CSV data for the
+five WBC regions
+
+6.make_daily_subsets.R
+extract the data for the nine 'sample boxes' (i.e. 3 x event; 3 x current;
+3 x reference) within each of the five WBC regions
+
+7.make_plot_DailyMonthlySubregions.R:
+
+8.plotSeasonalClimatologies.R
+
+Fig00_Aviso+_EKEMean.R
+
+Fig01_Aviso+_VelocityMean.R
+
+Fig02_Aviso+_VelocityTrend.R
+
+Fig03_Aviso+_EKETrend.R
+
+Fig04_OISST_MeanTrend.R
+
+Fig05_OISST_Count.R
+
+Fig06_OISST_MeanInt.R
+
+Fig07_OISST_MaxInt.R
+
+Fig08_OISST_CumInt.R
+
+Fig09_OISST_Duration.R
+
+Fig010_OISST_MeanIntTrend.R
+
+Fig011_OISST_MaxIntTrend.R
+
+Fig012_OISST_CumIntTrend.R
+
+Fig013_OISST_DurationTrend.R
+
+Fig014_OISST_OnsetTrend.R
+
+Fig015_OISST_DeclineTrend.R
+
+Fig016_OISST_CountTrend.R
+
+Fig017_MODIS_AquaChlMean.R
+
+Fig018_MODIS_Aqua_MeanTrend.R
+
+Figxx_map_parula.R
+
+functions.R
+
+old/
+
+plot.layers.R
+
+regionDefinition.R
+
+regional_analyses/
+
+subRegions.csv
+
+theme.R
