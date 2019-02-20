@@ -28,4 +28,5 @@ WBCs.code-workspace
 
 # Misc
 _private/
-old/
+_old/
+_LaTeX/
