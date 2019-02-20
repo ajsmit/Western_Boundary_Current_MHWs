@@ -25,3 +25,6 @@ references/*.pdf
 # User added
 WBCs (1).Rproj
 WBCs.code-workspace
+
+# Misc
+_private/
