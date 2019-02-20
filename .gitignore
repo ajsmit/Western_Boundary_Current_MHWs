@@ -17,10 +17,11 @@ references/*.pdf
 /*_cache/
 /cache/
 
-# Temporary files created by R markdown
+# Temporary files created by R markdown et al...
 *.utf8.md
 *.knit.md
 .Rproj.user
+~$C_*.docx
 
 # User added
 WBCs (1).Rproj
