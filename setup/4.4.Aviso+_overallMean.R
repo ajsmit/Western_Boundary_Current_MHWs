@@ -8,8 +8,8 @@ library(tidyverse)
 
 source("setup/functions.R")
 
-csvInDir <- "/Volumes/Benguela/spatial/processed/Aviso+/WBC/daily"
-csvOutDir <- "/Volumes/Benguela/spatial/processed/Aviso+/WBC/mean"
+csvInDir <- "/Volumes/Benguela/spatial/processed/Aviso/WBC/daily"
+csvOutDir <- "/Volumes/Benguela/spatial/processed/Aviso/WBC/mean"
 
 
 # Calculate monthly Aviso+ data -------------------------------------------

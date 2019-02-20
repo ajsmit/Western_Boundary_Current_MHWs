@@ -1,4 +1,27 @@
-.Rproj.user
+
+# History files
 .Rhistory
+.Rapp.history
+
+# Session Data files
 .RData
+
+# RStudio files
 .Ruserdata
+.Rproj.user/
+
+# PDFs
+references/*.pdf
+
+# knitr and R markdown default cache directories
+/*_cache/
+/cache/
+
+# Temporary files created by R markdown
+*.utf8.md
+*.knit.md
+.Rproj.user
+
+# User added
+WBCs (1).Rproj
+WBCs.code-workspace

@@ -16,6 +16,16 @@ EAC_events <- as.tibble(fread(paste0(csvDir, "/", "EAC-avhrr-only-v2.19810901-20
 KC_events <- as.tibble(fread(paste0(csvDir, "/", "KC-avhrr-only-v2.19810901-20180930_events.csv")))
 GS_events <- as.tibble(fread(paste0(csvDir, "/", "GS-avhrr-only-v2.19810901-20180930_events.csv")))
 
+
+# Bathy data --------------------------------------------------------------
+
+bathyDir <- "/Users/ajsmit/spatial/GEBCO_2014_Grid/csv"
+AC_bathy <- fread(paste0(bathyDir, "/", "AC", "_bathy.csv"))
+BC_bathy <- fread(paste0(bathyDir, "/", "BC", "_bathy.csv"))
+EAC_bathy <- fread(paste0(bathyDir, "/", "EAC", "_bathy.csv"))
+GS_bathy <- fread(paste0(bathyDir, "/", "GS", "_bathy.csv"))
+KC_bathy <- fread(paste0(bathyDir, "/", "KC", "_bathy.csv"))
+
 # Source the regression function
 source("setup/functions.R")
 
@@ -39,7 +49,6 @@ EAC_annualMaxInt <- eventMaxIntFun(EAC_events)
 KC_annualMaxInt <- eventMaxIntFun(KC_events)
 GS_annualMaxInt <- eventMaxIntFun(GS_events)
 
-
 # Calculate the trend for MaxInts per year
 AC_annualMaxIntTrend <- ddply(AC_annualMaxInt, .(lon, lat), linFun, poissan = FALSE, .parallel = TRUE)
 BC_annualMaxIntTrend <- ddply(BC_annualMaxInt, .(lon, lat), linFun, poissan = FALSE, .parallel = TRUE)
@@ -53,49 +62,48 @@ GS_annualMaxIntTrend <- ddply(GS_annualMaxInt, .(lon, lat), linFun, poissan = FA
 # read in the region-specific components
 source("setup/plot.layers.R")
 
-gv.plot <- function(data, plot.parameters) {
+gv.plot <- function(data, plot.parameters, bathy) {
 
   data$slope <- round(data$slope, 2)
 
   fig <- ggplot(data, aes(x = lon, y = lat)) +
     geom_raster(aes(fill = slope)) +
-    scale_fill_gradientn(colours = col1, limits = c(-1.0, 1.0)) +
+    # scale_fill_gradientn(colours = col1, limits = c(-1.0, 1.0)) +
+    scale_fill_continuous_diverging(palette = "Blue-Red 3", na.value = "#011789", rev = FALSE) +
     geom_contour(aes(x = lon, y = lat, z = pval),
                  binwidth = 0.05, breaks = c(0.05),
-                 colour = "grey20", size = 0.2) +
-    theme_map() +
+                 colour = "grey50", size = 0.2) +
+    stat_contour(data = bathy, aes(x = lon, y = lat, z = z),
+                 col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
     guides(alpha = "none",
-           fill = guide_colourbar(title = "Trend: maximum intensity\n[°C/dec]",
+           fill = guide_colourbar(title = "[°C/dec]",
                                   frame.colour = "black",
-                                  frame.linewidth = 0.2,
+                                  frame.linewidth = 0.4,
                                   ticks.colour = "black",
                                   barheight = unit(2, units = "mm"),
-                                  barwidth = unit(70, units = "mm"),
+                                  barwidth = unit(27, units = "mm"),
                                   draw.ulim = F,
-                                  title.position = 'top',
+                                  title.position = 'left',
                                   title.hjust = 0.5,
-                                  label.hjust = 0.5),
-           size = "none") +
+                                  label.hjust = 0.5)) +
+    theme_map() + labs(x = NULL, y = NULL) +
     plot.parameters
+  return(fig)
   return(fig)
 }
 
-AC.fig011 <- gv.plot(AC_annualMaxIntTrend, AC.layers)
-BC.fig011 <- gv.plot(BC_annualMaxIntTrend, BC.layers)
-EAC.fig011 <- gv.plot(EAC_annualMaxIntTrend, EAC.layers)
-KC.fig011 <- gv.plot(KC_annualMaxIntTrend, KC.layers)
-GS.fig011 <- gv.plot(GS_annualMaxIntTrend, GS.layers)
+AC.fig011 <- gv.plot(AC_annualMaxIntTrend, AC.layers, AC_bathy)
+BC.fig011 <- gv.plot(BC_annualMaxIntTrend, BC.layers, BC_bathy)
+EAC.fig011 <- gv.plot(EAC_annualMaxIntTrend, EAC.layers, EAC_bathy)
+KC.fig011 <- gv.plot(KC_annualMaxIntTrend, KC.layers, KC_bathy)
+GS.fig011 <- gv.plot(GS_annualMaxIntTrend, GS.layers, GS_bathy)
 
-l <- get_legend(AC.fig011)
-fig011 <- ggarrange(AC.fig011 + theme(legend.position = 'none'),
-                    BC.fig011 + theme(legend.position = 'none'),
-                    EAC.fig011 + theme(legend.position = 'none'),
-                    l,
-                    KC.fig011 + theme(legend.position = 'none'),
-                    GS.fig011 + theme(legend.position = 'none'),
-                    ncol = 2, nrow = 3)
-annotate_figure(fig011,
-                top = text_grob("OISST MHW maximum intensity (trend: 1981-09-01 to 2018-09-01)"))
+fig011 <- ggarrange(AC.fig011,
+                    BC.fig011,
+                    EAC.fig011,
+                    GS.fig011,
+                    KC.fig011,
+                    ncol = 1, nrow = 5)
 ggplot2::ggsave("figures/Fig011_OISST_MaxIntTrend.jpg",
-                width = 7.0 * (1/3), height = 8.3 * (1/3), scale = 3.5)
+                width = 3.5 * (1/3), height = 13 * (1/3), scale = 3.7)
 

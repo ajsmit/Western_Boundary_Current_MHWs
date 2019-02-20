@@ -76,7 +76,7 @@ ylim_AC <- c(-52.5, -12.5)
 
 # Find the subregion box extents ------------------------------------------
 
-bx <- read.csv2("/Volumes/GoogleDrive/My Drive/WBCs/setup/subRegions.csv")
+bx <- read.csv2("setup/subRegions.csv")
 AC.bx <- c(bx[1:9, c(4:7)])
 BC.bx <- c(bx[10:18, c(4:7)])
 EAC.bx <- c(bx[19:27, c(4:7)])
