@@ -1,8 +1,6 @@
 library(data.table)
 library(tidyverse)
 library(ggplot2)
-library(viridis)
-library(RColorBrewer)
 library(ggpubr)
 library(doMC); doMC::registerDoMC(cores = 4)
 
@@ -30,6 +28,9 @@ KC_bathy <- fread(paste0(bathyDir, "/", "KC", "_bathy.csv"))
 # Source the regression function
 source("setup/functions.R")
 
+# read in the region-specific components
+source("setup/plot.layers.R")
+
 # Calculte the number of events per annum
 
 eventMeanIntFun <- function(events) {
@@ -43,13 +44,11 @@ eventMeanIntFun <- function(events) {
 }
 
 # Do the annual MeanInts
-
 AC_annualMeanInt <- eventMeanIntFun(AC_events)
 BC_annualMeanInt <- eventMeanIntFun(BC_events)
 EAC_annualMeanInt <- eventMeanIntFun(EAC_events)
 KC_annualMeanInt <- eventMeanIntFun(KC_events)
 GS_annualMeanInt <- eventMeanIntFun(GS_events)
-
 
 # Calculate the trend for MeanInts per year
 AC_annualMeanIntTrend <- ddply(AC_annualMeanInt, .(lon, lat), linFun, poissan = FALSE, .parallel = TRUE)
@@ -58,26 +57,22 @@ EAC_annualMeanIntTrend <- ddply(EAC_annualMeanInt, .(lon, lat), linFun, poissan 
 KC_annualMeanIntTrend <- ddply(KC_annualMeanInt, .(lon, lat), linFun, poissan = FALSE, .parallel = TRUE)
 GS_annualMeanIntTrend <- ddply(GS_annualMeanInt, .(lon, lat), linFun, poissan = FALSE, .parallel = TRUE)
 
-
 # Make a function to create the basic plot components ---------------------
 
 # read in the region-specific components
 source("setup/plot.layers.R")
 
 gv.plot <- function(data, plot.parameters, bathy) {
-
-  data$slope <- round(data$slope, 2)
-
   fig <- ggplot(data, aes(x = lon, y = lat)) +
     geom_raster(aes(fill = slope)) +
-    scale_fill_continuous_diverging(palette = "Blue-Red 3", na.value = "#011789", rev = FALSE) +
+    scale_fill_gradientn(colours = col1,
+                         values = scales::rescale(c(min(data$slope), 0, max(data$slope)))) +
     geom_contour(aes(x = lon, y = lat, z = pval),
                  binwidth = 0.05, breaks = c(0.05),
-                 colour = "grey50", size = 0.2) +
+                 colour = "white", size = 0.2) +
     stat_contour(data = bathy, aes(x = lon, y = lat, z = z),
                  col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
-    guides(alpha = "none",
-           fill = guide_colourbar(title = "[°C/dec]",
+    guides(fill = guide_colourbar(title = "[°C/dec]",
                                   frame.colour = "black",
                                   frame.linewidth = 0.4,
                                   ticks.colour = "black",

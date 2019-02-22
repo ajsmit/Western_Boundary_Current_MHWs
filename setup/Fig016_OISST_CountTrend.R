@@ -64,12 +64,13 @@ gv.plot <- function(data, plot.parameters, bathy) {
 
   fig <- ggplot(data, aes(x = lon, y = lat)) +
     geom_raster(aes(fill = slope)) +
-    scale_fill_continuous_diverging(palette = "Blue-Red 3", na.value = "#011789", rev = FALSE) +
-    geom_contour(aes(x = lon, y = lat, z = pval),
-                 binwidth = 0.05, breaks = c(0.05),
-                 colour = "grey50", size = 0.2) +
+    scale_fill_gradientn(colours = col1_51,
+                         values = scales::rescale(c(min(data$slope), 0, max(data$slope)))) +
     stat_contour(data = bathy, aes(x = lon, y = lat, z = z),
                  col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
+    geom_contour(aes(x = lon, y = lat, z = pval),
+                 binwidth = 0.05, breaks = c(0.05),
+                 colour = "white", size = 0.2) +
     guides(alpha = "none",
            fill = guide_colourbar(title = "[events/dec]",
                                   frame.colour = "black",
