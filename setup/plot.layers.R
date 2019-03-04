@@ -97,7 +97,7 @@ AC.layers = list(
   coord_fixed(ratio = 1, xlim = c(-1.875, 53.125), ylim = c(-52.5, -12.5), expand = TRUE),
   scale_x_continuous(expand = c(0, 0), labels = scales::unit_format(unit = "°E", sep = ""), breaks = c(10, 20, 30, 40)),
   scale_y_continuous(expand = c(0, 0), labels = scales::unit_format(unit = "°S", sep = ""), breaks = c(-45, -35, -25)),
-  labs(title = "Agulhas Current", x = NULL, y = NULL)
+  labs(title = NULL, x = NULL, y = NULL)
 )
 
 BC.layers = list(
@@ -108,7 +108,7 @@ BC.layers = list(
   coord_fixed(ratio = 1, xlim = c(290, 345), ylim = c(-45, -5), expand = TRUE),
   scale_x_continuous(expand = c(0, 0), labels = scales::unit_format(unit = "°E", sep = ""), breaks = c(300, 310, 320, 330)),
   scale_y_continuous(expand = c(0, 0), labels = scales::unit_format(unit = "°S", sep = ""), breaks = c(-40, -30, -20, -10)),
-  labs(title = "Brazil Current", x = NULL, y = NULL)
+  labs(title = NULL, x = NULL, y = NULL)
 )
 
 EAC.layers <- list(
@@ -119,7 +119,7 @@ EAC.layers <- list(
   coord_fixed(ratio = 1, xlim = c(125, 180), ylim = c(-48.75, -8.75), expand = TRUE),
   scale_x_continuous(expand = c(0, 0), labels = scales::unit_format(unit = "°E", sep = ""), breaks = c(145, 155)),
   scale_y_continuous(expand = c(0, 0), labels = scales::unit_format(unit = "°S", sep = ""), breaks = c(-40, -30, -20)),
-  labs(title = "East Australian Current", x = NULL, y = NULL)
+  labs(title = NULL, x = NULL, y = NULL)
 )
 
 KC.layers <- list(
@@ -130,7 +130,7 @@ KC.layers <- list(
   coord_fixed(ratio = 1, xlim = c(120, 175), ylim = c(12.5, 52.5), expand = TRUE),
   scale_x_continuous(expand = c(0, 0), labels = scales::unit_format(unit = "°E", sep = ""), breaks = c(130, 140, 150, 160, 170)),
   scale_y_continuous(expand = c(0, 0), labels = scales::unit_format(unit = "°N", sep = ""), breaks = c(20, 30, 40)),
-  labs(title = "Kuroshio Current", x = NULL, y = NULL)
+  labs(title = NULL, x = NULL, y = NULL)
 )
 
 GS.layers <- list(
@@ -141,5 +141,5 @@ GS.layers <- list(
   coord_fixed(ratio = 1, xlim = c(267.5, 322.5), ylim = c(15, 55), expand = TRUE),
   scale_x_continuous(expand = c(0, 0), labels = scales::unit_format(unit = "°E", sep = ""), breaks = c(275, 285, 295, 305, 315)),
   scale_y_continuous(expand = c(0, 0), labels = scales::unit_format(unit = "°N", sep = ""), breaks = c(20, 30, 40, 50)),
-  labs(title = "Gulf Stream", x = NULL, y = NULL, subtitle = NULL)
+  labs(title = NULL, x = NULL, y = NULL, subtitle = NULL)
 )

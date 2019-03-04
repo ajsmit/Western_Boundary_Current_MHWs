@@ -19,62 +19,90 @@ csvInDir <- "/Volumes/Benguela/spatial/processed/Aviso/WBC/daily"
 # Bathy data
 
 bathyDir <- "/Users/ajsmit/spatial/GEBCO_2014_Grid/csv"
-AC_bathy <- fread(paste0(bathyDir, "/", AC, "_bathy.csv"))
-BC_bathy <- fread(paste0(bathyDir, "/", BC, "_bathy.csv"))
-EAC_bathy <- fread(paste0(bathyDir, "/", EAC, "_bathy.csv"))
-GS_bathy <- fread(paste0(bathyDir, "/", GS, "_bathy.csv"))
-KC_bathy <- fread(paste0(bathyDir, "/", KC, "_bathy.csv"))
+AC.bathy <- fread(paste0(bathyDir, "/", "AC", "_bathy.csv"))
+BC.bathy <- fread(paste0(bathyDir, "/", "BC", "_bathy.csv"))
+EAC.bathy <- fread(paste0(bathyDir, "/", "EAC", "_bathy.csv"))
+GS.bathy <- fread(paste0(bathyDir, "/", "GS", "_bathy.csv"))
+KC.bathy <- fread(paste0(bathyDir, "/", "KC", "_bathy.csv"))
 
-# Mean Kinetic Energy (MKE) function
-mke.fun <- function(dat) {
-  mke <- dat %>%
-    dplyr::select(-ugosa, -vgosa) %>%
-    dplyr::mutate(ugos = ugos * 100,
-                  vgos = vgos * 100,
-                  year = lubridate::year(fastDate(time)),
-                  month = lubridate::month(fastDate(time))) %>%
-    dplyr::group_by(lat, lon) %>%
-    dplyr::summarise(mke = 0.5 * (mean(vgos, na.rm = TRUE)^2 + mean(ugos, na.rm = TRUE)^2)) %>%
-    dplyr::ungroup()
-  return(mke)
-}
+ke.fun <- function(region) {
+  # Read in the Aviso data
+  aviso.dir <- "/Volumes/Benguela/lustre/Aviso/global/delayed-time/grids/msl/all-sat-merged"
+  aviso.dat <- "outfile_regridded.nc"
+  nc <- nc_open(paste0(aviso.dir, "/", region, "/", aviso.dat))
+  ugos <- ncvar_get(nc, varid = "ugos") * 100 %>%
+    round(4)
 
-# Eddy Kinetic Energy (EKE) function
-eke.fun <- function(dat) {
-  eke <- dat %>%
-    dplyr::mutate(ugos = ugos * 100,
-                  vgos = vgos * 100,
-                  ugosa = ugosa * 100,
-                  vgosa = vgosa * 100,
-                  year = lubridate::year(fastDate(time)),
-                  month = lubridate::month(fastDate(time))) %>%
+  # Prepare the data.table
+  dimnames(ugos) <- list(lon = nc$dim$lon$vals,
+                         lat = nc$dim$lat$vals,
+                         t = nc$dim$time$vals)
+  ke <- as.data.table(melt(ugos, value.name = "ugos"))
+  ke[, c("t", "vgos", "ugosa", "vgosa") := .( # slow
+    as.Date(t, origin = "1950-01-01 00:00:00"),
+    as.vector(ncvar_get(nc, varid = "vgos")) * 100,
+    as.vector(ncvar_get(nc, varid = "ugosa")) * 100,
+    as.vector(ncvar_get(nc, varid = "vgosa")) * 100
+  )
+  ]
+  nc_close(nc)
+
+  out <- ke %>%
+    na.omit() %>%
     dplyr::mutate(eke = 0.5 * ((vgosa)^2 + (ugosa)^2)) %>%
-    dplyr::group_by(lon, lat, month) %>%
-    dplyr::summarise(eke = mean(eke, na.rm = TRUE)) %>%
-    dplyr::ungroup() %>%
     dplyr::group_by(lon, lat) %>%
-    dplyr::summarise(eke = mean(eke, na.rm = TRUE)) %>%
+    dplyr::mutate(eke = roll_mean(eke, n = 30, align = "center", fill = c(-999, -999, -999))) %>%
+    dplyr::filter(eke > -999) %>%
+    dplyr::summarise(mke = 0.5 * (mean(vgos, na.rm = TRUE)^2 + mean(ugos, na.rm = TRUE)^2),
+                     eke = mean(eke, na.rm = TRUE)) %>%
     dplyr::ungroup()
-  return(eke)
+
+  return(out)
 }
+
+AC.dat <- ke.fun("AC")
+save(AC.dat, file = "/Volumes/Benguela/spatial/processed/WBC/misc_results/AC_ke_v3.RData")
+rm(AC.dat)
+BC.dat <- ke.fun("BC")
+save(BC.dat, file = "/Volumes/Benguela/spatial/processed/WBC/misc_results/BC_ke_v3.RData")
+rm(BC.dat)
+EAC.dat <- ke.fun("EAC")
+save(EAC.dat, file = "/Volumes/Benguela/spatial/processed/WBC/misc_results/EAC_ke_v3.RData")
+rm(EAC.dat)
+GS.dat <- ke.fun("GS")
+save(GS.dat, file = "/Volumes/Benguela/spatial/processed/WBC/misc_results/GS_ke_v3.RData")
+rm(GS.dat)
+KC.dat <- ke.fun("KC")
+save(KC.dat, file = "/Volumes/Benguela/spatial/processed/WBC/misc_results/KC_ke_v3.RData")
+rm(KC.dat)
+
+
+# Load data prepared above ------------------------------------------------
+
+keDir <- "/Volumes/Benguela/spatial/processed/WBC/misc_results"
+load(paste0(keDir, "/", "AC_ke_v3.RData"))
+load(paste0(keDir, "/", "BC_ke_v3.RData"))
+load(paste0(keDir, "/", "EAC_ke_v3.RData"))
+load(paste0(keDir, "/", "KC_ke_v3.RData"))
+load(paste0(keDir, "/", "GS_ke_v3.RData"))
 
 
 # Agulhas Current ---------------------------------------------------------
 
-AC.file <- "AC-dataset-duacs-rep-global-merged-allsat-phy-l4-v3.csv"
-AC.sl <- as.tibble(fread(paste0(csvInDir, "/", AC.file), verbose = FALSE))
-colnames(AC.sl) <- c("lon", "lat", "time", "ugos", "vgos", "ugosa", "vgosa", "sla", "adt")
-
-AC.mke <- mke.fun(AC.sl)
-AC.eke <- eke.fun(AC.sl)
-rm(AC.sl)
-
-plt1a <- ggplot(AC.mke, aes(x = lon, y = lat)) +
+load("/Users/ajsmit/Dropbox/R/WBCs/masks/AC-masks.RData")
+mke <- fortify(mask.list$mke90)
+eke <- fortify(mask.list$eke90)
+int <- fortify(mask.list$int90)
+AC.Fig00a <- ggplot(AC.dat, aes(x = lon, y = lat)) +
   geom_raster(aes(fill = mke)) +
-  scale_fill_continuous_sequential(palette = "Inferno", na.value = "#011789", rev = TRUE, breaks = c(500, 4100, 7700)) +
-  stat_contour(data = bathy, aes(x = lon, y = lat, z = z, alpha = ..level..),
-                 col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
-  guides(fill = guide_colourbar(title = expression((cm^2~s^{-2})),
+  scale_fill_continuous_sequential(palette = "Viridis", na.value = "#011789", rev = TRUE, breaks = c(500, 4100, 7700)) +
+  stat_contour(data = AC.bathy, aes(x = lon, y = lat, z = z),
+               col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
+  geom_polygon(data = mke, aes(long, lat, group = group),
+               colour = "red3", size = 0.4, fill = NA) +
+  guides(alpha = "none",
+         size = "none",
+         fill = guide_colourbar(title = expression((cm^2~s^{-2})),
                                 frame.colour = "black",
                                 frame.linewidth = 0.4,
                                 ticks.colour = "black",
@@ -86,12 +114,16 @@ plt1a <- ggplot(AC.mke, aes(x = lon, y = lat)) +
                                 label.hjust = 0.5)) +
   theme_map() + labs(x = NULL, y = NULL) + AC.layers
 
-plt1b <- ggplot(AC.eke, aes(x = lon, y = lat)) +
+AC.Fig00b <- ggplot(AC.dat, aes(x = lon, y = lat)) +
   geom_raster(aes(fill = eke)) +
-  scale_fill_continuous_sequential(palette = "Inferno", rev = TRUE, breaks = c(200, 1500, 3000)) +
-  stat_contour(data = AC_bathy, aes(x = lon, y = lat, z = z, alpha = ..level..),
-                 col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
-  guides(fill = guide_colourbar(title = expression((cm^2~s^{-2})),
+  scale_fill_continuous_sequential(palette = "Viridis", rev = TRUE, breaks = c(200, 1500, 3000)) +
+  stat_contour(data = AC.bathy, aes(x = lon, y = lat, z = z),
+               col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
+  geom_polygon(data = eke, aes(long, lat, group = group),
+               colour = "navy", size = 0.4, fill = NA) +
+  guides(alpha = "none",
+         size = "none",
+         fill = guide_colourbar(title = expression((cm^2~s^{-2})),
                                 frame.colour = "black",
                                 frame.linewidth = 0.4,
                                 ticks.colour = "black",
@@ -106,20 +138,20 @@ plt1b <- ggplot(AC.eke, aes(x = lon, y = lat)) +
 
 # Brazil Current ----------------------------------------------------------
 
-BC.file <- "BC-dataset-duacs-rep-global-merged-allsat-phy-l4-v3.csv"
-BC.sl <- as.tibble(fread(paste0(csvInDir, "/", BC.file), verbose = FALSE))
-colnames(BC.sl) <- c("lon", "lat", "time", "ugos", "vgos", "ugosa", "vgosa", "sla", "adt")
-
-BC.mke <- mke.fun(BC.sl)
-BC.eke <- eke.fun(BC.sl)
-rm(BC.sl)
-
-plt2a <- ggplot(BC.mke, aes(x = lon, y = lat)) +
+load("/Users/ajsmit/Dropbox/R/WBCs/masks/BC-masks.RData")
+mke <- fortify(mask.list$mke90)
+eke <- fortify(mask.list$eke90)
+int <- fortify(mask.list$int90)
+BC.Fig00a <- ggplot(BC.dat, aes(x = lon, y = lat)) +
   geom_raster(aes(fill = mke)) +
-  scale_fill_continuous_sequential(palette = "Inferno", na.value = "#011789", rev = TRUE, breaks = c(500, 4100, 7700)) +
-  stat_contour(data = BC_bathy, aes(x = lon, y = lat, z = z, alpha = ..level..),
-                 col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
-  guides(fill = guide_colourbar(title = expression((cm^2~s^{-2})),
+  scale_fill_continuous_sequential(palette = "Viridis", na.value = "#011789", rev = TRUE, breaks = c(500, 4100, 7700)) +
+  stat_contour(data = BC.bathy, aes(x = lon, y = lat, z = z),
+               col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
+  geom_polygon(data = mke, aes(long, lat, group = group),
+               colour = "red3", size = 0.4, fill = NA) +
+  guides(alpha = "none",
+         size = "none",
+         fill = guide_colourbar(title = expression((cm^2~s^{-2})),
                                 frame.colour = "black",
                                 frame.linewidth = 0.4,
                                 ticks.colour = "black",
@@ -131,10 +163,16 @@ plt2a <- ggplot(BC.mke, aes(x = lon, y = lat)) +
                                 label.hjust = 0.5)) +
   theme_map() + labs(x = NULL, y = NULL) + BC.layers
 
-plt2b <- ggplot(BC.eke, aes(x = lon, y = lat)) +
+BC.Fig00b <- ggplot(BC.dat, aes(x = lon, y = lat)) +
   geom_raster(aes(fill = eke)) +
-  scale_fill_continuous_sequential(palette = "Inferno", rev = TRUE, breaks = c(200, 800, 1600)) +
-  guides(fill = guide_colourbar(title = expression((cm^2~s^{-2})),
+  scale_fill_continuous_sequential(palette = "Viridis", rev = TRUE, breaks = c(200, 800, 1600)) +
+  stat_contour(data = BC.bathy, aes(x = lon, y = lat, z = z),
+               col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
+  geom_polygon(data = eke, aes(long, lat, group = group),
+               colour = "navy", size = 0.4, fill = NA) +
+  guides(alpha = "none",
+         size = "none",
+         fill = guide_colourbar(title = expression((cm^2~s^{-2})),
                                 frame.colour = "black",
                                 frame.linewidth = 0.4,
                                 ticks.colour = "black",
@@ -149,22 +187,20 @@ plt2b <- ggplot(BC.eke, aes(x = lon, y = lat)) +
 
 # East Australian Current -------------------------------------------------
 
-EAC.file <- "EAC-dataset-duacs-rep-global-merged-allsat-phy-l4-v3.csv"
-EAC.sl <- as.tibble(fread(paste0(csvInDir, "/", EAC.file), verbose = FALSE))
-colnames(EAC.sl) <- c("lon", "lat", "time", "ugos", "vgos", "ugosa", "vgosa", "sla", "adt")
-EAC.sl <- EAC.sl %>%
-  dplyr::filter(lat <= -15)
-
-EAC.mke <- mke.fun(EAC.sl)
-EAC.eke <- eke.fun(EAC.sl)
-rm(EAC.sl)
-
-plt3a <- ggplot(EAC.mke, aes(x = lon, y = lat)) +
+load("/Users/ajsmit/Dropbox/R/WBCs/masks/EAC-masks.RData")
+mke <- fortify(mask.list$mke90)
+eke <- fortify(mask.list$eke90)
+int <- fortify(mask.list$int90)
+EAC.Fig00a <- ggplot(EAC.dat, aes(x = lon, y = lat)) +
   geom_raster(aes(fill = mke)) +
-  scale_fill_continuous_sequential(palette = "Inferno", na.value = "#011789", rev = TRUE, breaks = c(500, 4100, 7700)) +
-  stat_contour(data = EAC_bathy, aes(x = lon, y = lat, z = z, alpha = ..level..),
-                 col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
-  guides(fill = guide_colourbar(title = expression((cm^2~s^{-2})),
+  scale_fill_continuous_sequential(palette = "Viridis", na.value = "#011789", rev = TRUE, breaks = c(500, 4100, 7700)) +
+  stat_contour(data = EAC.bathy, aes(x = lon, y = lat, z = z),
+               col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
+  geom_polygon(data = mke, aes(long, lat, group = group),
+               colour = "red3", size = 0.4, fill = NA) +
+  guides(alpha = "none",
+         size = "none",
+         fill = guide_colourbar(title = expression((cm^2~s^{-2})),
                                 frame.colour = "black",
                                 frame.linewidth = 0.4,
                                 ticks.colour = "black",
@@ -176,10 +212,16 @@ plt3a <- ggplot(EAC.mke, aes(x = lon, y = lat)) +
                                 label.hjust = 0.5)) +
   theme_map() + labs(x = NULL, y = NULL) + EAC.layers
 
-plt3b <- ggplot(EAC.eke, aes(x = lon, y = lat)) +
+EAC.Fig00b <- ggplot(EAC.dat, aes(x = lon, y = lat)) +
   geom_raster(aes(fill = eke)) +
-  scale_fill_continuous_sequential(palette = "Inferno", rev = TRUE, breaks = c(400, 2100, 4200)) +
-  guides(fill = guide_colourbar(title = expression((cm^2~s^{-2})),
+  scale_fill_continuous_sequential(palette = "Viridis", rev = TRUE, breaks = c(400, 2100, 4200)) +
+  stat_contour(data = EAC.bathy, aes(x = lon, y = lat, z = z),
+               col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
+  geom_polygon(data = eke, aes(long, lat, group = group),
+               colour = "navy", size = 0.4, fill = NA) +
+  guides(alpha = "none",
+         size = "none",
+         fill = guide_colourbar(title = expression((cm^2~s^{-2})),
                                 frame.colour = "black",
                                 frame.linewidth = 0.4,
                                 ticks.colour = "black",
@@ -194,20 +236,20 @@ plt3b <- ggplot(EAC.eke, aes(x = lon, y = lat)) +
 
 # Gulf Stream -------------------------------------------------------------
 
-GS.file <- "GS-dataset-duacs-rep-global-merged-allsat-phy-l4-v3.csv"
-GS.sl <- as.tibble(fread(paste0(csvInDir, "/", GS.file), verbose = FALSE))
-colnames(GS.sl) <- c("lon", "lat", "time", "ugos", "vgos", "ugosa", "vgosa", "sla", "adt")
-
-GS.mke <- mke.fun(GS.sl)
-GS.eke <- eke.fun(GS.sl)
-rm(GS.sl)
-
-plt4a <- ggplot(GS.mke, aes(x = lon, y = lat)) +
+load("/Users/ajsmit/Dropbox/R/WBCs/masks/GS-masks.RData")
+mke <- fortify(mask.list$mke90)
+eke <- fortify(mask.list$eke90)
+int <- fortify(mask.list$int90)
+GS.Fig00a <- ggplot(GS.dat, aes(x = lon, y = lat)) +
   geom_raster(aes(fill = mke)) +
-  scale_fill_continuous_sequential(palette = "Inferno", na.value = "#011789", rev = TRUE, breaks = c(500, 4100, 7700)) +
-  stat_contour(data = GS_bathy, aes(x = lon, y = lat, z = z, alpha = ..level..),
-                 col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
-  guides(fill = guide_colourbar(title = expression((cm^2~s^{-2})),
+  scale_fill_continuous_sequential(palette = "Viridis", na.value = "#011789", rev = TRUE, breaks = c(500, 4100, 7700)) +
+  stat_contour(data = GS.bathy, aes(x = lon, y = lat, z = z),
+               col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
+  geom_polygon(data = mke, aes(long, lat, group = group),
+               colour = "red3", size = 0.4, fill = NA) +
+  guides(alpha = "none",
+         size = "none",
+         fill = guide_colourbar(title = expression((cm^2~s^{-2})),
                                 frame.colour = "black",
                                 frame.linewidth = 0.4,
                                 ticks.colour = "black",
@@ -219,10 +261,16 @@ plt4a <- ggplot(GS.mke, aes(x = lon, y = lat)) +
                                 label.hjust = 0.5)) +
   theme_map() + labs(x = NULL, y = NULL) + GS.layers
 
-plt4b <- ggplot(GS.eke, aes(x = lon, y = lat)) +
+GS.Fig00b <- ggplot(GS.dat, aes(x = lon, y = lat)) +
   geom_raster(aes(fill = eke)) +
-  scale_fill_continuous_sequential(palette = "Inferno", rev = TRUE, breaks = c(200, 1800, 3600)) +
-  guides(fill = guide_colourbar(title = expression((cm^2~s^{-2})),
+  scale_fill_continuous_sequential(palette = "Viridis", rev = TRUE, breaks = c(200, 1800, 3600)) +
+  stat_contour(data = GS.bathy, aes(x = lon, y = lat, z = z),
+               col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
+  geom_polygon(data = eke, aes(long, lat, group = group),
+               colour = "navy", size = 0.4, fill = NA) +
+  guides(alpha = "none",
+         size = "none",
+         fill = guide_colourbar(title = expression((cm^2~s^{-2})),
                                 frame.colour = "black",
                                 frame.linewidth = 0.4,
                                 ticks.colour = "black",
@@ -237,20 +285,20 @@ plt4b <- ggplot(GS.eke, aes(x = lon, y = lat)) +
 
 # Kuroshio Current --------------------------------------------------------
 
-KC.file <- "KC-dataset-duacs-rep-global-merged-allsat-phy-l4-v3.csv"
-KC.sl <- as.tibble(fread(paste0(csvInDir, "/", KC.file), verbose = FALSE))
-colnames(KC.sl) <- c("lon", "lat", "time", "ugos", "vgos", "ugosa", "vgosa", "sla", "adt")
-
-KC.mke <- mke.fun(KC.sl)
-KC.eke <- eke.fun(KC.sl)
-rm(KC.sl)
-
-plt5a <- ggplot(KC.mke, aes(x = lon, y = lat)) +
+load("/Users/ajsmit/Dropbox/R/WBCs/masks/KC-masks.RData")
+mke <- fortify(mask.list$mke90)
+eke <- fortify(mask.list$eke90)
+int <- fortify(mask.list$int90)
+KC.Fig00a <- ggplot(KC.dat, aes(x = lon, y = lat)) +
   geom_raster(aes(fill = mke)) +
-  scale_fill_continuous_sequential(palette = "Inferno", na.value = "#011789", rev = TRUE, breaks = c(500, 4100, 7700)) +
-  stat_contour(data = KC_bathy, aes(x = lon, y = lat, z = z, alpha = ..level..),
-                 col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
-  guides(fill = guide_colourbar(title = expression((cm^2~s^{-2})),
+  scale_fill_continuous_sequential(palette = "Viridis", na.value = "#011789", rev = TRUE, breaks = c(500, 4100, 7700)) +
+  stat_contour(data = KC.bathy, aes(x = lon, y = lat, z = z),
+               col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
+  geom_polygon(data = mke, aes(long, lat, group = group),
+               colour = "red3", size = 0.4, fill = NA) +
+  guides(alpha = "none",
+         size = "none",
+         fill = guide_colourbar(title = expression((cm^2~s^{-2})),
                                 frame.colour = "black",
                                 frame.linewidth = 0.4,
                                 ticks.colour = "black",
@@ -262,10 +310,16 @@ plt5a <- ggplot(KC.mke, aes(x = lon, y = lat)) +
                                 label.hjust = 0.5)) +
   theme_map() + labs(x = NULL, y = NULL) + KC.layers
 
-plt5b <- ggplot(KC.eke, aes(x = lon, y = lat)) +
+KC.Fig00b <- ggplot(KC.dat, aes(x = lon, y = lat)) +
   geom_raster(aes(fill = eke)) +
-  scale_fill_continuous_sequential(palette = "Inferno", rev = TRUE, breaks = c(200, 1600, 3000)) +
-  guides(fill = guide_colourbar(title = expression((cm^2~s^{-2})),
+  scale_fill_continuous_sequential(palette = "Viridis", rev = TRUE, breaks = c(200, 1600, 3000)) +
+  stat_contour(data = KC.bathy, aes(x = lon, y = lat, z = z),
+               col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
+  geom_polygon(data = eke, aes(long, lat, group = group),
+               colour = "navy", size = 0.4, fill = NA) +
+  guides(alpha = "none",
+         size = "none",
+         fill = guide_colourbar(title = expression((cm^2~s^{-2})),
                                 frame.colour = "black",
                                 frame.linewidth = 0.4,
                                 ticks.colour = "black",
@@ -277,11 +331,20 @@ plt5b <- ggplot(KC.eke, aes(x = lon, y = lat)) +
                                 label.hjust = 0.5)) +
   theme_map() + labs(x = NULL, y = NULL) + KC.layers
 
-fig.ke <- ggarrange(plt1a, plt1b,
-                    plt2a, plt2b,
-                    plt3a, plt3b,
-                    plt4a, plt4b,
-                    plt5a, plt5b,
-                    ncol = 2, nrow = 5)
-ggplot2::ggsave("setup/publ_plots/Fig00_Aviso+_MKE_EKE.jpg",
-                width = 7.0 * (1/3), height = 13 * (1/3), scale = 3.7)
+Fig00.mke <- ggarrange(AC.Fig00a,
+                       BC.Fig00a,
+                       EAC.Fig00a,
+                       GS.Fig00a,
+                       KC.Fig00a,
+                       ncol = 1, nrow = 5, labels = list("a", "e", "i", "m", "q"))
+ggplot2::ggsave("publ_plots/Fig00_Aviso+_MKE.jpg",
+                width = 3.5 * (1/3), height = 13 * (1/3), scale = 3.7)
+
+Fig00.eke <- ggarrange(AC.Fig00b,
+                       BC.Fig00b,
+                       EAC.Fig00b,
+                       GS.Fig00b,
+                       KC.Fig00b,
+                       ncol = 1, nrow = 5, labels = list("b", "f", "j", "n", "r"))
+ggplot2::ggsave("publ_plots/Fig00_Aviso+_EKE.jpg",
+                width = 3.5 * (1/3), height = 13 * (1/3), scale = 3.7)

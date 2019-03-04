@@ -39,18 +39,18 @@ source("setup/plot.layers.R")
 # Functions: velocities, EKE, etc.
 source("setup/functions.R")
 
-# region <- "AC"
+# region <- "EAC"
 
 # Exceedence above threshold per month:
 # this function calculates for each month and each pixel the
 # mean MKE and EKE (from Aviso+) and mean mean MHW event intensity
 uber.fun <- function(region) {
-  clim.dir <- "/Volumes/Benguela/spatial/processed/OISSTv2/WBC/climatology"
+  clim.dir <- "/Volumes/Benguela/lustre/spatial/processed/OISSTv2/WBC/climatology"
   clim.base <- "-avhrr-only-v2.19810901-20180930_climatology.csv"
   clim.dat <- paste0(region, clim.base)
   clim <- as_tibble(fread(paste0(clim.dir, "/", clim.dat)))
 
-  ex <- clim %>%
+  exc <- clim %>%
     dplyr::mutate(t = fastDate(t)) %>%
     dplyr::filter(t >= "1993-01-01") %>%
     dplyr::mutate(time = floor_date(t, unit = "month")) %>%
@@ -68,26 +68,26 @@ uber.fun <- function(region) {
 
   dimnames(ugos) <- list(lon = nc$dim$lon$vals,
                          lat = nc$dim$lat$vals,
-                         time = nc$dim$time$vals)
+                         t = nc$dim$time$vals)
   sla <- # slow!
     as_tibble(melt(ugos, value.name = "ugos"), row.names = NULL) %>%
     dplyr::mutate(vgos = as.vector(ncvar_get(nc, varid = "vgos")),
                   ugosa = as.vector(ncvar_get(nc, varid = "ugosa")),
                   vgosa = as.vector(ncvar_get(nc, varid = "vgosa")),
-                  time = as.Date(time, origin = "1950-01-01 00:00:00")) %>%
+                  t = as.Date(t, origin = "1950-01-01 00:00:00")) %>%
     na.omit()
   nc_close(nc)
 
   # Mean and Eddy Kinetic Energy (MKE & EKE) function
   # per each month of the year
-  ke <- sla %>%
-    dplyr::mutate(time = floor_date(time, unit = "month"),
+  geo <- sla %>%
+    dplyr::mutate(t = floor_date(t, unit = "month"),
                   ugos = ugos * 100,
                   vgos = vgos * 100,
                   ugosa = ugosa * 100,
                   vgosa = vgosa * 100,
                   eke = 0.5 * ((vgosa)^2 + (ugosa)^2)) %>%
-    dplyr::group_by(lat, lon, time) %>%
+    dplyr::group_by(lat, lon, t) %>%
     dplyr::summarise(mke = 0.5 * (mean(vgos, na.rm = TRUE)^2 + mean(ugos, na.rm = TRUE)^2),
                      eke = mean(eke, na.rm = TRUE)) %>%
     dplyr::ungroup()
@@ -96,8 +96,8 @@ uber.fun <- function(region) {
   # Join the data and do correlation
   eke.cor.fun <- function(df) cor(df$eke, df$ex)
   mke.cor.fun <- function(df) cor(df$mke, df$ex)
-  dat <- ex %>%
-    dplyr::left_join(ke) %>%
+  dat <- exc %>%
+    dplyr::left_join(geo) %>%
     dplyr::filter(eke > 0) %>%
     na.omit() %>%
     dplyr::group_by(lon, lat) %>%

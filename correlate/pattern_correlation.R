@@ -1,5 +1,5 @@
+library(data.table)
 library(tidyverse)
-library(ggplot2)
 library(lubridate)
 library(raster)
 library(colorspace)
@@ -9,13 +9,14 @@ library(doMC); doMC::registerDoMC(cores = 4)
 
 # Read in the region-specific components
 source("setup/regionDefinition.R")
-source("setup/regional_analyses/regional.plot.layers.R")
-AvisoDir <- "/Volumes/Benguela/spatial/processed/Aviso+/WBC/daily"
+source("regional_analyses/regional.plot.layers.R")
+AvisoDir <- "/Volumes/Benguela/spatial/processed/Aviso/WBC/daily"
 eventDir <- "/Volumes/Benguela/spatial/processed/OISSTv2/WBC/MHWs"
 sstRateDir <- "/Volumes/Benguela/spatial/processed/OISSTv2/WBC/monthly-rate"
 
 # Functions: velocities, EKE, etc.
 source("setup/functions.R")
+
 
 # Miscellaneous functions -------------------------------------------------
 
@@ -68,29 +69,31 @@ totalCntFun <- function(events) {
   return(freq)
 }
 
-# aviso.dat <- "AC-dataset-duacs-rep-global-merged-allsat-phy-l4-v3.csv"
-# event.dat <- "AC-avhrr-only-v2.19810901-20180930_events.csv"
-#
-# ev <- as_tibble(fread(paste0(eventDir, "/", event.dat)))
+# region <- "EAC"
 
 # An über function to rule them all
-matchEvent2KEgrid <- function(aviso.dat, event.dat, sstRate.dat) {
-  require(data.table)
-  # kinetic energy
-  ke <- as_tibble(fread(paste0(AvisoDir, "/", aviso.dat), verbose = FALSE))
+matchEvent2KEgrid <- function(region) {
+  # define mask unions
+  load(paste0("/Users/ajsmit/Dropbox/R/WBCs/masks/", region, "-mask_points.Rdata"))
+  mke.ev.pts <- unique(rbind(as.data.frame(mask.pts$mke.pt), as.data.frame(mask.pts$ev.pt)))
+  eke.ev.pts <- unique(rbind(as.data.frame(mask.pts$eke.pt), as.data.frame(mask.pts$ev.pt)))
+
+  # load Aviso+, event, and SST trend data
+  ke <- fread(paste0(AvisoDir, "/", region, "-dataset-duacs-rep-global-merged-allsat-phy-l4-v3.csv"))
   colnames(ke) <- c("lon", "lat", "time", "ugos", "vgos", "ugosa", "vgosa", "sla", "adt")
+  ev <- fread(paste0(eventDir, "/", region, "-avhrr-only-v2.19810901-20180930_events.csv"))
+  trnd <- fread(paste0(sstRateDir, "/", region, "-rate-19810901-20180901.csv"))
+  load(paste0("masks/", region, "-mask_points.Rdata"))
+
+  # calculate kinetic energy
   mke <- mke.fun(ke)
   eke <- eke.fun(ke)
   rm(ke)
 
-  # mean of mean heat wave intensity
-  ev <- as_tibble(fread(paste0(eventDir, "/", event.dat)))
+  # calculate mean of mean heat wave intensity
   int <- MeanInt(ev)
   cnt <- totalCntFun(ev)
   rm(ev)
-
-  # rate of change in SST
-  trnd <- as_tibble(fread(paste0(sstRateDir, "/", sstRate.dat)))
 
   # make event intensity into a raster (interpolation grid)
   coordinates(int) <- ~ lon + lat
@@ -127,12 +130,29 @@ matchEvent2KEgrid <- function(aviso.dat, event.dat, sstRate.dat) {
   eke.grd <- resample(eke.grd, int.grd)
   mke.grd <- resample(mke.grd, int.grd)
 
-  out <- tibble(y.int = as.vector(int.grd@data@values),
-                       y.cnt = as.vector(cnt.grd@data@values),
-                       y.trnd = as.vector(trnd.grd@data@values),
-                       x.mke = as.vector(mke.grd@data@values),
-                       x.eke = as.vector(eke.grd@data@values))
-  out <- out[complete.cases(out), ]
+  int.df <- as.data.frame(int.grd, xy = TRUE, na.rm = FALSE, long = FALSE)
+  cnt.df <- as.data.frame(cnt.grd, xy = TRUE, na.rm = FALSE, long = FALSE)
+  trnd.df <- as.data.frame(trnd.grd, xy = TRUE, na.rm = FALSE, long = FALSE)
+  mke.df <- as.data.frame(mke.grd, xy = TRUE, na.rm = FALSE, long = FALSE)
+  eke.df <- as.data.frame(eke.grd, xy = TRUE, na.rm = FALSE, long = FALSE)
+
+  dat.df <- data.frame(lon = mke.df$x,
+                       lat = mke.df$y,
+                       mke = mke.df$mke,
+                       eke = eke.df$eke,
+                       int = int.df[,3],
+                       cnt = cnt.df[,3],
+                       trnd = trnd.df$DT_model)
+
+  mke.dat.df <- dat.df %>%
+    dplyr::right_join(mke.ev.pts) %>%
+    na.omit()
+  eke.dat.df <- dat.df %>%
+    dplyr::right_join(eke.ev.pts) %>%
+    na.omit()
+
+  out <- list(mke = mke.dat.df,
+              eke = eke.dat.df)
 
   return(out)
 }
@@ -140,62 +160,47 @@ matchEvent2KEgrid <- function(aviso.dat, event.dat, sstRate.dat) {
 
 # Prepare data ------------------------------------------------------------
 
-AC.dat <- matchEvent2KEgrid(aviso.dat = "AC-dataset-duacs-rep-global-merged-allsat-phy-l4-v3.csv",
-                            event.dat = "AC-avhrr-only-v2.19810901-20180930_events.csv",
-                            sstRate.dat = "AC-rate-19810901-20180901.csv")
-
-BC.dat <- matchEvent2KEgrid(aviso.dat = "BC-dataset-duacs-rep-global-merged-allsat-phy-l4-v3.csv",
-                            event.dat = "BC-avhrr-only-v2.19810901-20180930_events.csv",
-                            sstRate.dat = "BC-rate-19810901-20180901.csv")
-
-EAC.dat <- matchEvent2KEgrid(aviso.dat = "EAC-dataset-duacs-rep-global-merged-allsat-phy-l4-v3.csv",
-                             event.dat = "EAC-avhrr-only-v2.19810901-20180930_events.csv",
-                             sstRate.dat = "EAC-rate-19810901-20180901.csv")
-
-GS.dat <- matchEvent2KEgrid(aviso.dat = "GS-dataset-duacs-rep-global-merged-allsat-phy-l4-v3.csv",
-                            event.dat = "GS-avhrr-only-v2.19810901-20180930_events.csv",
-                            sstRate.dat = "GS-rate-19810901-20180901.csv")
-
-KC.dat <- matchEvent2KEgrid(aviso.dat = "KC-dataset-duacs-rep-global-merged-allsat-phy-l4-v3.csv",
-                            event.dat = "KC-avhrr-only-v2.19810901-20180930_events.csv",
-                            sstRate.dat = "KC-rate-19810901-20180901.csv")
+AC.dat <- matchEvent2KEgrid("AC")
+BC.dat <- matchEvent2KEgrid("BC")
+EAC.dat <- matchEvent2KEgrid("EAC")
+GS.dat <- matchEvent2KEgrid("GS")
+KC.dat <- matchEvent2KEgrid("KC")
 
 
 # 'Pattern' correlations --------------------------------------------------
 
-cor(AC.dat$x.mke, AC.dat$y.int)
-cor(AC.dat$x.eke, AC.dat$y.int)
-cor(AC.dat$x.mke, AC.dat$y.cnt)
-cor(AC.dat$x.eke, AC.dat$y.cnt)
-cor(AC.dat$x.mke, AC.dat$y.trnd)
-cor(AC.dat$x.eke, AC.dat$y.trnd)
+cor(AC.dat$mke$mke, AC.dat$mke$int)
+cor(AC.dat$mke$mke, AC.dat$mke$cnt)
+cor(AC.dat$mke$mke, AC.dat$mke$trnd)
+cor(AC.dat$eke$eke, AC.dat$eke$int)
+cor(AC.dat$eke$eke, AC.dat$eke$cnt)
+cor(AC.dat$eke$eke, AC.dat$eke$trnd)
 
-cor(BC.dat$x.mke, BC.dat$y.int)
-cor(BC.dat$x.eke, BC.dat$y.int)
-cor(BC.dat$x.mke, BC.dat$y.cnt)
-cor(BC.dat$x.eke, BC.dat$y.cnt)
-cor(BC.dat$x.mke, BC.dat$y.trnd)
-cor(BC.dat$x.eke, BC.dat$y.trnd)
+cor(BC.dat$mke$mke, BC.dat$mke$int)
+cor(BC.dat$mke$mke, BC.dat$mke$cnt)
+cor(BC.dat$mke$mke, BC.dat$mke$trnd)
+cor(BC.dat$eke$eke, BC.dat$eke$int)
+cor(BC.dat$eke$eke, BC.dat$eke$cnt)
+cor(BC.dat$eke$eke, BC.dat$eke$trnd)
 
-cor(EAC.dat$x.mke, EAC.dat$y.int)
-cor(EAC.dat$x.eke, EAC.dat$y.int)
-cor(EAC.dat$x.mke, EAC.dat$y.cnt)
-cor(EAC.dat$x.eke, EAC.dat$y.cnt)
-cor(EAC.dat$x.mke, EAC.dat$y.trnd)
-cor(EAC.dat$x.eke, EAC.dat$y.trnd)
+cor(EAC.dat$mke$mke, EAC.dat$mke$int)
+cor(EAC.dat$mke$mke, EAC.dat$mke$cnt)
+cor(EAC.dat$mke$mke, EAC.dat$mke$trnd)
+cor(EAC.dat$eke$eke, EAC.dat$eke$int)
+cor(EAC.dat$eke$eke, EAC.dat$eke$cnt)
+cor(EAC.dat$eke$eke, EAC.dat$eke$trnd)
 
-cor(GS.dat$x.mke, GS.dat$y.int)
-cor(GS.dat$x.eke, GS.dat$y.int)
-cor(GS.dat$x.mke, GS.dat$y.cnt)
-cor(GS.dat$x.eke, GS.dat$y.cnt)
-cor(GS.dat$x.mke, GS.dat$y.trnd)
-cor(GS.dat$x.eke, GS.dat$y.trnd)
+cor(GS.dat$mke$mke, GS.dat$mke$int)
+cor(GS.dat$mke$mke, GS.dat$mke$cnt)
+cor(GS.dat$mke$mke, GS.dat$mke$trnd)
+cor(GS.dat$eke$eke, GS.dat$eke$int)
+cor(GS.dat$eke$eke, GS.dat$eke$cnt)
+cor(GS.dat$eke$eke, GS.dat$eke$trnd)
 
-cor(KC.dat$x.mke, KC.dat$y.int)
-cor(KC.dat$x.eke, KC.dat$y.int)
-cor(KC.dat$x.mke, KC.dat$y.cnt)
-cor(KC.dat$x.eke, KC.dat$y.cnt)
-cor(KC.dat$x.mke, KC.dat$y.trnd)
-cor(KC.dat$x.eke, KC.dat$y.trnd)
-
+cor(KC.dat$mke$mke, KC.dat$mke$int)
+cor(KC.dat$mke$mke, KC.dat$mke$cnt)
+cor(KC.dat$mke$mke, KC.dat$mke$trnd)
+cor(KC.dat$eke$eke, KC.dat$eke$int)
+cor(KC.dat$eke$eke, KC.dat$eke$cnt)
+cor(KC.dat$eke$eke, KC.dat$eke$trnd)
 
