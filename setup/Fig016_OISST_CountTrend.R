@@ -1,20 +1,42 @@
 library(data.table)
 library(tidyverse)
 library(ggplot2)
-library(viridis)
-library(RColorBrewer)
+library(colorspace)
 library(ggpubr)
 library(doMC); doMC::registerDoMC(cores = 4)
+
+# read in the region-specific components
+source("setup/plot.layers.R")
+
+
+# Define functions --------------------------------------------------------
+
+# calculte the number of events per annum
+# (events per year per decade)
+eventCntFun <- function(events) {
+  freq <- events %>%
+    dplyr::filter(event == TRUE) %>%
+    dplyr::mutate(t = fastDate(t)) %>%
+    dplyr::mutate(year = year(t)) %>%
+    dplyr::group_by(lon, lat, year) %>%
+    dplyr::summarise(y = n())
+}
 
 
 # Read in OISST trend data ------------------------------------------------
 
+# ... and do the annual counts
 csvDir <- "/Volumes/Benguela/spatial/processed/OISSTv2/WBC/MHWs"
-AC_events <- as.tibble(fread(paste0(csvDir, "/", "AC-avhrr-only-v2.19810901-20180930_events.csv")))
-BC_events <- as.tibble(fread(paste0(csvDir, "/", "BC-avhrr-only-v2.19810901-20180930_events.csv")))
-EAC_events <- as.tibble(fread(paste0(csvDir, "/", "EAC-avhrr-only-v2.19810901-20180930_events.csv")))
-KC_events <- as.tibble(fread(paste0(csvDir, "/", "KC-avhrr-only-v2.19810901-20180930_events.csv")))
-GS_events <- as.tibble(fread(paste0(csvDir, "/", "GS-avhrr-only-v2.19810901-20180930_events.csv")))
+AC_events <- as.tibble(fread(paste0(csvDir, "/", "AC-avhrr-only-v2.19810901-20180930_proto_events.csv")))
+AC_annualCount <- eventCntFun(AC_events); rm(AC_events)
+BC_events <- as.tibble(fread(paste0(csvDir, "/", "BC-avhrr-only-v2.19810901-20180930_proto_events.csv")))
+BC_annualCount <- eventCntFun(BC_events); rm(BC_events)
+EAC_events <- as.tibble(fread(paste0(csvDir, "/", "EAC-avhrr-only-v2.19810901-20180930_proto_events.csv")))
+EAC_annualCount <- eventCntFun(EAC_events); rm(EAC_events)
+KC_events <- as.tibble(fread(paste0(csvDir, "/", "KC-avhrr-only-v2.19810901-20180930_proto_events.csv")))
+KC_annualCount <- eventCntFun(KC_events); rm(KC_events)
+GS_events <- as.tibble(fread(paste0(csvDir, "/", "GS-avhrr-only-v2.19810901-20180930_proto_events.csv")))
+GS_annualCount <- eventCntFun(GS_events); rm(GS_events)
 
 
 # Bathy data --------------------------------------------------------------
@@ -25,25 +47,6 @@ BC_bathy <- fread(paste0(bathyDir, "/", "BC", "_bathy.csv"))
 EAC_bathy <- fread(paste0(bathyDir, "/", "EAC", "_bathy.csv"))
 GS_bathy <- fread(paste0(bathyDir, "/", "GS", "_bathy.csv"))
 KC_bathy <- fread(paste0(bathyDir, "/", "KC", "_bathy.csv"))
-
-# read in the region-specific components
-source("setup/plot.layers.R")
-
-# calculte the number of events per annum
-eventCntFun <- function(events) {
-  freq <- events %>%
-    dplyr::mutate(year = year(date_start)) %>%
-    dplyr::select(-date_start, -date_end, -date_peak) %>%
-    dplyr::group_by(lon, lat, year) %>%
-    dplyr::summarise(y = n())
-}
-
-# Do the annual counts
-AC_annualCount <- eventCntFun(AC_events)
-BC_annualCount <- eventCntFun(BC_events)
-EAC_annualCount <- eventCntFun(EAC_events)
-KC_annualCount <- eventCntFun(KC_events)
-GS_annualCount <- eventCntFun(GS_events)
 
 # Source the regression function
 source("setup/functions.R")
@@ -99,5 +102,5 @@ fig016 <- ggarrange(AC.fig016,
                     GS.fig016,
                     KC.fig016,
                     ncol = 1, nrow = 5)
-ggplot2::ggsave("figures/Fig016_OISST_CountTrend.jpg",
+ggplot2::ggsave("figures/Fig016_OISST_CountTrend_v2.jpg",
                 width = 3.5 * (1/3), height = 13 * (1/3), scale = 3.7)
