@@ -38,12 +38,15 @@ theme_map <- function(...) {
 # Colours -----------------------------------------------------------------
 
 # colours from:
-# Backeberg, B. C., et al. (2012). Impact of intensified Indian Ocean winds on mesoscale variability in the Agulhas system.
+# Backeberg, B. C., et al. (2012). Impact of intensified Indian Ocean
+# winds on mesoscale variability in the Agulhas system.
 # Nature Climate Change, 2(8), 608–612. http://doi.org/10.1038/nclimate1587
 col1 <- c("#223D80", "#264C8B", "#285B97", "#2378AB", "#237AAF", "#348FBF",
           "#65ADD1", "#95CAE2", "#CBE6EF", "#FFFFFE", "#F3C9CA", "#E8969A",
           "#E06D71", "#D94A50", "#D6373C", "#D53136", "#D42B31", "#CD2830",
           "#B5282F")
+
+col1_51 <- colorRampPalette(col1)(51) # make more colours inbetween...
 
 col2 <- c("#8600FF", "#3F94FE", "#77CAFD", "#99EEFF", "#D9FFD9", "#FFFFFF",
           "#FFFF4C", "#FFCC00", "#FF7E00", "#FF0000", "#5E0000")
@@ -94,7 +97,7 @@ AC.layers = list(
   coord_fixed(ratio = 1, xlim = c(-1.875, 53.125), ylim = c(-52.5, -12.5), expand = TRUE),
   scale_x_continuous(expand = c(0, 0), labels = scales::unit_format(unit = "°E", sep = ""), breaks = c(10, 20, 30, 40)),
   scale_y_continuous(expand = c(0, 0), labels = scales::unit_format(unit = "°S", sep = ""), breaks = c(-45, -35, -25)),
-  labs(title = "Agulhas Current", x = NULL, y = NULL)
+  labs(title = NULL, x = NULL, y = NULL)
 )
 
 BC.layers = list(
@@ -105,7 +108,7 @@ BC.layers = list(
   coord_fixed(ratio = 1, xlim = c(290, 345), ylim = c(-45, -5), expand = TRUE),
   scale_x_continuous(expand = c(0, 0), labels = scales::unit_format(unit = "°E", sep = ""), breaks = c(300, 310, 320, 330)),
   scale_y_continuous(expand = c(0, 0), labels = scales::unit_format(unit = "°S", sep = ""), breaks = c(-40, -30, -20, -10)),
-  labs(title = "Brazil Current", x = NULL, y = NULL)
+  labs(title = NULL, x = NULL, y = NULL)
 )
 
 EAC.layers <- list(
@@ -116,7 +119,7 @@ EAC.layers <- list(
   coord_fixed(ratio = 1, xlim = c(125, 180), ylim = c(-48.75, -8.75), expand = TRUE),
   scale_x_continuous(expand = c(0, 0), labels = scales::unit_format(unit = "°E", sep = ""), breaks = c(145, 155)),
   scale_y_continuous(expand = c(0, 0), labels = scales::unit_format(unit = "°S", sep = ""), breaks = c(-40, -30, -20)),
-  labs(title = "East Australian Current", x = NULL, y = NULL)
+  labs(title = NULL, x = NULL, y = NULL)
 )
 
 KC.layers <- list(
@@ -127,7 +130,7 @@ KC.layers <- list(
   coord_fixed(ratio = 1, xlim = c(120, 175), ylim = c(12.5, 52.5), expand = TRUE),
   scale_x_continuous(expand = c(0, 0), labels = scales::unit_format(unit = "°E", sep = ""), breaks = c(130, 140, 150, 160, 170)),
   scale_y_continuous(expand = c(0, 0), labels = scales::unit_format(unit = "°N", sep = ""), breaks = c(20, 30, 40)),
-  labs(title = "Kuroshio Current", x = NULL, y = NULL)
+  labs(title = NULL, x = NULL, y = NULL)
 )
 
 GS.layers <- list(
@@ -138,5 +141,5 @@ GS.layers <- list(
   coord_fixed(ratio = 1, xlim = c(267.5, 322.5), ylim = c(15, 55), expand = TRUE),
   scale_x_continuous(expand = c(0, 0), labels = scales::unit_format(unit = "°E", sep = ""), breaks = c(275, 285, 295, 305, 315)),
   scale_y_continuous(expand = c(0, 0), labels = scales::unit_format(unit = "°N", sep = ""), breaks = c(20, 30, 40, 50)),
-  labs(title = "Gulf Stream", x = NULL, y = NULL, subtitle = NULL)
+  labs(title = NULL, x = NULL, y = NULL, subtitle = NULL)
 )
