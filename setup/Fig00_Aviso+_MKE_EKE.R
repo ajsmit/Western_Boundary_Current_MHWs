@@ -1,7 +1,7 @@
 # Plots of MKE and EKE ----------------------------------------------------
 
 library(tidyverse)
-library(ggplot2)
+library(RcppRoll)
 library(lubridate)
 library(data.table)
 library(colorspace)

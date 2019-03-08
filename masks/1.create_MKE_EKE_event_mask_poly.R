@@ -169,17 +169,17 @@ poly.plot <- function(region, plot.parameters) {
   return(plt90)
 }
 
-AC.plt <- poly.plot("AC", AC.layers)
-BC.plt <- poly.plot("BC", BC.layers)
-EAC.plt <- poly.plot("EAC", EAC.layers)
-GS.plt <- poly.plot("GS", GS.layers)
-KC.plt <- poly.plot("KC", KC.layers)
+AC.poly.plt <- poly.plot("AC", AC.layers)
+BC.poly.plt <- poly.plot("BC", BC.layers)
+EAC.poly.plt <- poly.plot("EAC", EAC.layers)
+GS.poly.plt <- poly.plot("GS", GS.layers)
+KC.poly.plt <- poly.plot("KC", KC.layers)
 
-fig_masks <- ggarrange(AC.plt,
-                       BC.plt,
-                       EAC.plt,
-                       GS.plt,
-                       KC.plt,
+fig_masks <- ggarrange(AC.poly.plt,
+                       BC.poly.plt,
+                       EAC.poly.plt,
+                       GS.poly.plt,
+                       KC.poly.plt,
                        ncol = 1, nrow = 5, labels = list("a", "b", "c", "d", "e"))
 ggplot2::ggsave("publ_plots/Figure_2_75eke.jpg",
                 width = 3.5 * (1/3), height = 13 * (1/3), scale = 3.7)

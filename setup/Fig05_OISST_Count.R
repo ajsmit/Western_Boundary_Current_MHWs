@@ -47,7 +47,7 @@ GS_totalCount <- totalCntFun(GS_events)
 # Make a function to create the basic plot components ---------------------
 
 gv.plot <- function(data, plot.parameters, bathy, region) {
-  load(paste0("/Users/ajsmit/Dropbox/R/WBCs/masks/", region, "-masks.RData"))
+  load(paste0("/Users/ajsmit/Dropbox/R/WBCs/masks/", region, "-masks_polys.RData"))
   eke <- fortify(mask.list$eke90)
   mke <- fortify(mask.list$mke90)
   fig <- ggplot(data, aes(x = lon, y = lat)) +
