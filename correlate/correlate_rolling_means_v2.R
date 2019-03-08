@@ -142,7 +142,7 @@ gv.plot <- function(plot.parameters, bathy, region) {
   eke <- fortify(mask.list$eke90)
   int <- fortify(mask.list$int90)
 
-  fig.mke <- ggplot(data, aes(x = lon, y = lat)) +
+  fig.mke <- ggplot(data = cor, aes(x = lon, y = lat)) +
     geom_raster(aes(fill = r.mke)) +
     scale_fill_continuous_diverging(palette = "Blue-Red 3", rev = FALSE) +
     # scale_fill_gradientn(colours = col1,
@@ -168,7 +168,7 @@ gv.plot <- function(plot.parameters, bathy, region) {
     theme_map() + labs(x = NULL, y = NULL) +
     plot.parameters
 
-  fig.eke2 <- ggplot(data, aes(x = lon, y = lat)) +
+  fig.eke2 <- ggplot(data = cor, aes(x = lon, y = lat)) +
     geom_raster(aes(fill = r.eke2)) +
     scale_fill_continuous_diverging(palette = "Blue-Red 3", rev = FALSE) +
     # scale_fill_gradientn(colours = col1,
@@ -200,10 +200,10 @@ gv.plot <- function(plot.parameters, bathy, region) {
 }
 
 AC.fig0x <- gv.plot(AC.layers, AC_bathy, "AC")
-BC.fig0x <- gv.plot(BC.cor, BC.layers, BC_bathy, "BC")
-EAC.fig0x <- gv.plot(EAC.cor, EAC.layers, EAC_bathy, "EAC")
-GS.fig0x <- gv.plot(GS.cor, GS.layers, GS_bathy, "GS")
-KC.fig0x <- gv.plot(KC.cor, KC.layers, KC_bathy, "KC")
+BC.fig0x <- gv.plot(BC.layers, BC_bathy, "BC")
+EAC.fig0x <- gv.plot(EAC.layers, EAC_bathy, "EAC")
+GS.fig0x <- gv.plot(GS.layers, GS_bathy, "GS")
+KC.fig0x <- gv.plot(KC.layers, KC_bathy, "KC")
 
 fig0x <- ggarrange(AC.fig0x,
                    BC.fig0x,
