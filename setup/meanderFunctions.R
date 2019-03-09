@@ -5,6 +5,7 @@
 
 library(tidyverse)
 library(ncdf4)
+library(RcppRoll)
 library(doMC); doMC::registerDoMC(cores = 50)
 
 
@@ -16,8 +17,14 @@ source("setup/regionDefinition.R")
 # The AVISO NetCDF files
 AVISO_files <- dir(path = "../data/AVISO", pattern = "CMEMS", full.names = T)
 
+# The AVISO region Rdata files
+AVISO_region_files <- dir(path = "../data/WBC", pattern = "AVISO_sub", full.names = T)
+
 # The MHW result files
 MHW_files <- dir(path = "../data/MHW", pattern = "MHW.calc.", full.names = T)
+
+# The MHW region files
+MHW_region_files <- dir(path = "../data/WBC", pattern = "MHW_sub", full.names = T)
 
 # The OISST lon index
 load("../tikoraluk/metadata/lon_OISST.RData")
@@ -110,16 +117,61 @@ MHW_sub_save <- function(region){
 
 # Calculate EKE -----------------------------------------------------------
 
-ke.fun <- function(df) {
-  out <- kdf %>%
+# This is designed to run on a dataframe that has already been grouped by lon/lat
+ke_calc <- function(df) {
+  res <- df %>%
     na.omit() %>%
     dplyr::mutate(eke = 0.5 * ((vgosa)^2 + (ugosa)^2)) %>%
-    dplyr::group_by(lon, lat) %>%
+    # dplyr::group_by(lon, lat) %>%
     dplyr::mutate(eke = roll_mean(eke, n = 30, align = "center", fill = c(-999, -999, -999))) %>%
     dplyr::filter(eke > -999) %>%
+    dplyr::group_by(t) %>% 
     dplyr::summarise(mke = 0.5 * (mean(vgos, na.rm = TRUE)^2 + mean(ugos, na.rm = TRUE)^2),
                      eke = mean(eke, na.rm = TRUE)) %>%
     dplyr::ungroup()
-  
-  return(out)
+  return(res)
+}
+
+# A multi-core using wrapper to be run via a for loop
+ke_region_save <- function(region){
+  # Choose the file based on region
+  load(paste0("../data/WBC/AVISO_sub_",region,".Rdata"))
+  # Grab the data
+  AVISO_KE <- plyr::ddply(AVISO_sub, .variables = c("lon", "lat"),
+                           .fun = ke_calc, .parallel = TRUE)
+  rm(AVISO_sub)
+  save(AVISO_KE, file = paste0("../data/WBC/AVISO_KE_",region,".Rdata"))
+}
+
+
+# Create MKE percentile masks ---------------------------------------------
+
+# testers...
+# load(paste0("../data/WBC/AVISO_KE_EAC.Rdata"))
+# df <- AVISO_KE
+# rm(AVISO_EKE)
+
+mke_mask <- function(region){
+  load(paste0("../data/WBC/AVISO_sub_",region,".Rdata"))
+  # Calculate mean MKE
+  mke_mean <- df %>%
+    group_by(lon, lat) %>%
+    summarise(mke_mean = mean(mke, na.rm = T))
+  # Find the 90t and 75th percentles for the region
+  mke_perc <- mke_mean %>% 
+    ungroup() %>% 
+    summarise(mke_90 = quantile(mke_mean, probs = 0.9),
+              mke_75 = quantile(mke_mean, probs = 0.75))
+  # Screen out pixels accordingly
+  mke_90 <- mke_mean %>% 
+    filter(mke_mean >= mke_perc$mke_90) %>% 
+    mutate(mke_90 = mke_perc$mke_90)
+  mke_75 <- mke_mean %>% 
+    filter(mke_mean >= mke_perc$mke_75,
+           mke_mean < mke_perc$mke_90) %>% 
+    mutate(mke_75 = mke_perc$mke_75)
+  # Combine and save
+  mke_masks <- list(mke_90 = mke_90,
+                    mke_75 = mke_75)
+  return(mke_masks)
 }

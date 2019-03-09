@@ -8,8 +8,7 @@
     # 2.1) The grids for these data already match on tikoraluk 
       # so no converting is required
 
-# With these databases recreated here, the next step is to re-calculate EKE,
-# which can be done with the existing code in xxxxx.R
+# With these databases recreated here, the next step is to re-calculate KE
 
 # With all of the results ready, the next step is to use the 90th perc.
 # EKE mask and the 75th perc. EKE mask to define the region within which 
@@ -28,13 +27,13 @@ source("setup/meanderFunctions.R")
 # Set cores
 library(doMC); doMC::registerDoMC(cores = 50)
 
-# Subset data
-# for(i in 1:ncol(bbox)){
-#   region <- colnames(bbox)[i]
-#   print(paste0("Began run on ",region," at ",Sys.time()))
-#   AVISO_sub_save(region)
-#   print(paste0("Finished run on ",region," at ",Sys.time()))
-# } ~4 -- 10 minutes per region
+# Subset AVISO data
+for(i in 1:ncol(bbox)){
+  region <- colnames(bbox)[i]
+  print(paste0("Began run on ",region," at ",Sys.time()))
+  AVISO_sub_save(region)
+  print(paste0("Finished run on ",region," at ",Sys.time()))
+} #~4 -- 10 minutes per region
 
 
 # Subsetting MHW results --------------------------------------------------
@@ -42,7 +41,7 @@ library(doMC); doMC::registerDoMC(cores = 50)
 # Set cores
 library(doMC); doMC::registerDoMC(cores = 50)
 
-# Subset data
+# Subset MHW data
 # for(i in 1:ncol(bbox)){
 #   region <- colnames(bbox)[i]
 #   print(paste0("Began run on ",region," at ",Sys.time()))
@@ -53,8 +52,33 @@ library(doMC); doMC::registerDoMC(cores = 50)
 
 # Calculate EKE -----------------------------------------------------------
 
+# Set cores
+library(doMC); doMC::registerDoMC(cores = 50)
+
+## NB: This is a bit too beefy
+  ## It looks like R will need to be manually restarted after each run
+  ## to effectively purge the memmory
+# Calculate EKE
+# for(i in 1:ncol(bbox)){
+#   region <- colnames(bbox)[i]
+  # print(paste0("Began run on ",region," at ",Sys.time()))
+  # ke_region_save(region)
+  # print(paste0("Finished run on ",region," at ",Sys.time()))
+# }
+
+## Individual runs
+# ke_region_save(colnames(bbox)[1])
+# ke_region_save(colnames(bbox)[2])
+# ke_region_save(colnames(bbox)[3])
+# ke_region_save(colnames(bbox)[4])
+# ke_region_save(colnames(bbox)[5])
+# ke_region_save(colnames(bbox)[6])
+
 
 # EKE percentile masks ----------------------------------------------------
+
+# Set cores
+library(doMC); doMC::registerDoMC(cores = 50)
 
 
 # Filter 90th and 75th areas ----------------------------------------------
