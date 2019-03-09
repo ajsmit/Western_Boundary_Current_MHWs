@@ -22,18 +22,39 @@
 source("setup/meanderFunctions.R")
 
 
-# Subsetting AVISO --------------------------------------------------------
+# Subet AVISO and calculate KE --------------------------------------------
 
 # Set cores
 library(doMC); doMC::registerDoMC(cores = 50)
 
-# Subset AVISO data
-for(i in 1:ncol(bbox)){
-  region <- colnames(bbox)[i]
-  print(paste0("Began run on ",region," at ",Sys.time()))
-  AVISO_sub_save(region)
-  print(paste0("Finished run on ",region," at ",Sys.time()))
-} #~4 -- 10 minutes per region
+## NB: This is too beefy to run in a for loop
+# Run sequentially
+# for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
+#   region <- colnames(bbox)[i]
+#   print(paste0("Began run on ",region," at ",Sys.time()))
+#   AVISO_KE_save(region)
+#   print(paste0("Finished run on ",region," at ",Sys.time()))
+#   Sys.sleep(10) # Let the server catch its breath
+# } #~10 -- 15 minutes per region
+# AVISO_KE_save(colnames(bbox)[1])
+# AVISO_KE_save(colnames(bbox)[2])
+# AVISO_KE_save(colnames(bbox)[3])
+AVISO_KE_save(colnames(bbox)[4])
+# AVISO_KE_save(colnames(bbox)[5])
+
+
+# EKE percentile masks ----------------------------------------------------
+
+# Set cores
+library(doMC); doMC::registerDoMC(cores = 50)
+
+# Run sequentially
+# for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
+#   region <- colnames(bbox)[i]
+#   print(paste0("Began run on ",region," at ",Sys.time()))
+#   mke_masks(region)
+#   print(paste0("Finished run on ",region," at ",Sys.time()))
+# }
 
 
 # Subsetting MHW results --------------------------------------------------
@@ -42,7 +63,7 @@ for(i in 1:ncol(bbox)){
 library(doMC); doMC::registerDoMC(cores = 50)
 
 # Subset MHW data
-# for(i in 1:ncol(bbox)){
+# for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
 #   region <- colnames(bbox)[i]
 #   print(paste0("Began run on ",region," at ",Sys.time()))
 #   MHW_sub_save(region)
@@ -50,49 +71,19 @@ library(doMC); doMC::registerDoMC(cores = 50)
 # }
 
 
-# Calculate EKE -----------------------------------------------------------
-
-# Set cores
-library(doMC); doMC::registerDoMC(cores = 50)
-
-## NB: This is a bit too beefy
-  ## It looks like R will need to be manually restarted after each run
-  ## to effectively purge the memmory
-# Calculate EKE
-# for(i in 1:ncol(bbox)){
-#   region <- colnames(bbox)[i]
-  # print(paste0("Began run on ",region," at ",Sys.time()))
-  # ke_region_save(region)
-  # print(paste0("Finished run on ",region," at ",Sys.time()))
-# }
-
-## Individual runs
-# ke_region_save(colnames(bbox)[1])
-# ke_region_save(colnames(bbox)[2])
-# ke_region_save(colnames(bbox)[3])
-# ke_region_save(colnames(bbox)[4])
-# ke_region_save(colnames(bbox)[5])
-# ke_region_save(colnames(bbox)[6])
-
-
-# EKE percentile masks ----------------------------------------------------
-
-# Set cores
-library(doMC); doMC::registerDoMC(cores = 50)
-
-
-# Filter 90th and 75th areas ----------------------------------------------
-
-
 # Correlate pixels --------------------------------------------------------
-# In this final step we take only the EKE and MHW pixels that are in the 
-# 75th perc. mask but not in the 90th perc. mask
-# We then take the days the pixels in the 75th to 90th perc. areas
-# are themselves in the 90th perc. for EKE
-# A count of how often this occurs and MHWs occur is made to find what
-# the proportion of this occurence is
-# The EKE and mean intensities on days when EKE is in the 90th perc. 
-# are then correlated
-# Thiw result will help to illustrate the potential relationship between
-# meanders and MHWs
+# In this final step we take only the MKE and MHW pixels that are in the 
+# 75th percentile mask but not in the 90th percentile mask.
+# We then take the days the pixels in the 75th percentile areas
+# are themselves in the 90th percentile for MKE.
+# A count of how often this occurs when MHWs are occurring is made to find
+# what the proportion of this occurence is.
+# The MKE and mean intensities on days when MKE is in the 90th perc. 
+# are then correlated.
+# This result will help to illustrate the potential relationship between
+# meanders and MHWs.
+
+
+# Visualise results -------------------------------------------------------
+
 

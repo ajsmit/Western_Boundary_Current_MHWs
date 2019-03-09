@@ -30,7 +30,7 @@ MHW_region_files <- dir(path = "../data/WBC", pattern = "MHW_sub", full.names = 
 load("../tikoraluk/metadata/lon_OISST.RData")
 
 
-# Subset AVISO ------------------------------------------------------------
+# Subset AVISO and calculate KE -------------------------------------------
 
 # testers...
 # file_name <- AVISO_files[1]
@@ -74,14 +74,35 @@ AVISO_sub_load <- function(file_name, coords){
   return(res)
 }
 
+# This is designed to run on a dataframe that has already been grouped by lon/lat
+AVISO_ke_calc <- function(df) {
+  res <- df %>%
+    na.omit() %>%
+    dplyr::mutate(eke = 0.5 * ((vgosa)^2 + (ugosa)^2)) %>%
+    # dplyr::group_by(lon, lat) %>%
+    dplyr::mutate(eke = roll_mean(eke, n = 30, align = "center", fill = c(-999, -999, -999))) %>%
+    dplyr::filter(eke > -999) %>%
+    dplyr::group_by(t) %>% 
+    dplyr::summarise(mke = 0.5 * (mean(vgos, na.rm = TRUE)^2 + mean(ugos, na.rm = TRUE)^2),
+                     eke = mean(eke, na.rm = TRUE)) %>%
+    dplyr::ungroup()
+  return(res)
+}
+
 # Function for combining and saving the subsetted AVISO data
-AVISO_sub_save <- function(region){
+AVISO_KE_save <- function(region){
   coords <- bbox[colnames(bbox) == region][1:4,]
   AVISO_sub <- plyr::ldply(AVISO_files,
-                                .fun = AVISO_sub_load, 
-                                .parallel = TRUE, 
-                                coords = coords)
-  save(AVISO_sub, file = paste0("../data/WBC/AVISO_sub_",region,".Rdata"))
+                           .fun = AVISO_sub_load, 
+                           .parallel = TRUE, 
+                           coords = coords)
+  # save(AVISO_sub, file = paste0("../data/WBC/AVISO_sub_",region,".Rdata"))
+  Sys.sleep(10) # Let the server catch its breath
+  AVISO_KE <- plyr::ddply(AVISO_sub, .variables = c("lon", "lat"),
+                          .fun = AVISO_ke_calc, .parallel = TRUE)
+  rm(AVISO_sub)
+  saveRDS(AVISO_KE, file = paste0("../data/WBC/AVISO_KE_",region,".Rds"))
+  rm(AVISO_KE)
 }
 
 
@@ -115,35 +136,6 @@ MHW_sub_save <- function(region){
 }
 
 
-# Calculate EKE -----------------------------------------------------------
-
-# This is designed to run on a dataframe that has already been grouped by lon/lat
-ke_calc <- function(df) {
-  res <- df %>%
-    na.omit() %>%
-    dplyr::mutate(eke = 0.5 * ((vgosa)^2 + (ugosa)^2)) %>%
-    # dplyr::group_by(lon, lat) %>%
-    dplyr::mutate(eke = roll_mean(eke, n = 30, align = "center", fill = c(-999, -999, -999))) %>%
-    dplyr::filter(eke > -999) %>%
-    dplyr::group_by(t) %>% 
-    dplyr::summarise(mke = 0.5 * (mean(vgos, na.rm = TRUE)^2 + mean(ugos, na.rm = TRUE)^2),
-                     eke = mean(eke, na.rm = TRUE)) %>%
-    dplyr::ungroup()
-  return(res)
-}
-
-# A multi-core using wrapper to be run via a for loop
-ke_region_save <- function(region){
-  # Choose the file based on region
-  load(paste0("../data/WBC/AVISO_sub_",region,".Rdata"))
-  # Grab the data
-  AVISO_KE <- plyr::ddply(AVISO_sub, .variables = c("lon", "lat"),
-                           .fun = ke_calc, .parallel = TRUE)
-  rm(AVISO_sub)
-  save(AVISO_KE, file = paste0("../data/WBC/AVISO_KE_",region,".Rdata"))
-}
-
-
 # Create MKE percentile masks ---------------------------------------------
 
 # testers...
@@ -151,17 +143,17 @@ ke_region_save <- function(region){
 # df <- AVISO_KE
 # rm(AVISO_EKE)
 
-mke_mask <- function(region){
-  load(paste0("../data/WBC/AVISO_sub_",region,".Rdata"))
+mke_masks <- function(region){
+  AVISO_KE <- readRDS(paste0("../data/WBC/AVISO_KE_",region,".Rds"))
   # Calculate mean MKE
-  mke_mean <- df %>%
+  mke_mean <- AVISO_KE %>%
     group_by(lon, lat) %>%
-    summarise(mke_mean = mean(mke, na.rm = T))
+    summarise(mke = mean(mke, na.rm = T))
   # Find the 90t and 75th percentles for the region
   mke_perc <- mke_mean %>% 
     ungroup() %>% 
-    summarise(mke_90 = quantile(mke_mean, probs = 0.9),
-              mke_75 = quantile(mke_mean, probs = 0.75))
+    summarise(mke_90 = quantile(mke, probs = 0.9),
+              mke_75 = quantile(mke, probs = 0.75))
   # Screen out pixels accordingly
   mke_90 <- mke_mean %>% 
     filter(mke_mean >= mke_perc$mke_90) %>% 
@@ -173,5 +165,46 @@ mke_mask <- function(region){
   # Combine and save
   mke_masks <- list(mke_90 = mke_90,
                     mke_75 = mke_75)
-  return(mke_masks)
+  rm(AVISO_KE)
+  saveRDS(mke_masks, file = paste0("../data/WBC/mke_masks_",region,".Rds"))
+  rm(mke_masks)
+}
+
+
+# Calculate cooccurrence and correlation ----------------------------------
+
+meander_cor_calc <- function(region){
+  # Load AVISO, MHW, and masks
+  AVISO_KE <- readRDS(paste0("../data/WBC/AVISO_KE_",region,".Rds"))
+  load(paste0("../data/WBC/MHW_sub_",region,".Rdata"))
+  masks <- readRDS(paste0("../data/WBC/mke_masks_",region,".Rds"))
+  # Take only the MKE and MHW pixels in the 75th percentile mask
+  # and only days when MKE is in the 90th percentile
+  # First grab MHW as this will be left_join to AVISO
+  MHW_75 <- MHW_sub %>% 
+    unnest(event) %>% 
+    filter(row_number() %% 2 == 1) %>% 
+    unnest(event) %>% 
+    filter(lon %in% masks$mke_75$lon,
+           lat %in% masks$mke_75$lat) %>% 
+    select(lon, lat, t, temp, seas, thresh, event) %>% 
+    group_by(lon, lat) %>% 
+  # Then create the base for the calculations
+  AVISO_75 <- AVISO_ke %>% 
+    filter(lon %in% masks$mke_75$lon,
+           lat %in% masks$mke_75$lat) %>% 
+    group_by(lon, lat) %>% 
+    left_join(MHW_75, by = c("lon", "lat", "t")) %>% 
+    mutate(count_all = n()) %>% 
+    filter(mke >= masks$mke_90$mke_90) %>% 
+    mutate(count_90 = n())
+    
+  
+  # Take the days in the that are in the 90th percentile
+  # A count of how often this occurs when MHWs are occurring is made to find
+  # what the proportion of this occurence is.
+  # The MKE and mean intensities on days when MKE is in the 90th perc. 
+  # are then correlated.
+  # This result will help to illustrate the potential relationship between
+  # meanders and MHWs.
 }
