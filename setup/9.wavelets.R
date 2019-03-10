@@ -1,0 +1,157 @@
+# Create a time series of KE and MHW intensity for a small region within each
+# of the areas of maximal MWH activity
+
+library(ncdf4)
+library(data.table)
+library(tidyverse)
+library(reshape2)
+library(RcppRoll)
+library(astrochron)
+library(WaveletComp)
+library(grid)
+library(doMC); doMC::registerDoMC(cores = 4)
+
+# Source stuff
+source("/Users/ajsmit/Dropbox/R/papers/diatom_age/functions.R")
+source("/Users/ajsmit/Dropbox/R/papers/diatom_age/custom_theme.R")
+source("/Users/ajsmit/Dropbox/R/WBCs/setup/functions.R")
+
+region <- "EAC"
+
+# Bounding boxes
+bbox <- data.frame("AC" = c(-42.5, -40, 12.5, 15),
+                   "BC" = c(-40, -37.5, 305, 307.5),
+                   "EAC" = c( -37.5, -35, 152.5, 155),
+                   "GS" = c(40, 42.5, 295, 297.5),
+                   "KC" = c(40, 42.5, 145, 147.5),
+                   row.names = c("latmin", "latmax", "lonmin", "lonmax"))
+
+make_ts <- function(region) {
+  # The Aviso data
+  aviso.dir <- "/Volumes/Benguela/lustre/Aviso/global/delayed-time/grids/msl/all-sat-merged" # /AC, /BA, etc.
+  aviso.dat <- "outfile_regridded.nc"
+  coords <- bbox[, region]
+  nc <- nc_open(paste0(aviso.dir, "/", region, "/", aviso.dat))
+  LatIdx <- which(nc$dim$lat$vals > coords[1] & nc$dim$lat$vals < coords[2])
+  LonIdx <- which(nc$dim$lon$vals > coords[3] & nc$dim$lon$vals < coords[4])
+  ugos <- ncvar_get(nc, varid = "ugos",
+                    start = c(LonIdx[1], LatIdx[1], 1),
+                    count = c(length(LonIdx), length(LatIdx), length(nc$dim$time$vals))) * 100 %>%
+    round(4)
+
+  dimnames(ugos) <- list(lon = nc$dim$lon$vals[LonIdx],
+                         lat = nc$dim$lat$vals[LatIdx],
+                         date = nc$dim$time$vals)
+  ke <- as.data.table(melt(ugos, value.name = "ugos"))
+  ke[, c("date", "vgos", "ugosa", "vgosa") := .( # slow
+    as.Date(date, origin = "1950-01-01 00:00:00"),
+    as.vector(ncvar_get(nc, varid = "vgos",
+                        start = c(LonIdx[1], LatIdx[1], 1),
+                        count = c(length(LonIdx), length(LatIdx), length(nc$dim$time$vals)))) * 100,
+    as.vector(ncvar_get(nc, varid = "ugosa",
+                        start = c(LonIdx[1], LatIdx[1], 1),
+                        count = c(length(LonIdx), length(LatIdx), length(nc$dim$time$vals)))) * 100,
+    as.vector(ncvar_get(nc, varid = "vgosa",
+                        start = c(LonIdx[1], LatIdx[1], 1),
+                        count = c(length(LonIdx), length(LatIdx), length(nc$dim$time$vals)))) * 100
+  )
+  ]
+  nc_close(nc)
+
+  ke <- ke[, lapply(.SD, mean), by = c("date")]
+  ke[, c("lon", "lat") := NULL]
+
+  ke[, eke := (0.5 * ((vgosa)^2 + (ugosa)^2))]
+  ke[, c("mke_roll", "eke_roll2") := .(
+    0.5 * (roll_mean(vgos, n = 30, align = "center")^2 + roll_mean(ugos, n = 30, align = "center")^2),
+    roll_mean(eke, n = 30, align = "center")
+  )]
+  # ke <- na.omit(ke)
+  # ke[, c("ugos", "vgos", "ugosa", "vgosa") := NULL]
+
+  # The OISST data
+  clim.dir <- "/Volumes/Benguela/spatial/processed/OISSTv2/WBC/climatology"
+  clim.dat <- "-avhrr-only-v2.19810901-20180930_climatology.csv"
+  clim <- fread(paste0(clim.dir, "/", region, clim.dat))
+  colnames(clim)[colnames(clim) == "t"] <- "date"
+  clim[, date := fastDate(date)]
+  clim <- clim[lon >= bbox["lonmin", region] & lon <= bbox["lonmax", region], ]
+  clim <- clim[lat >= bbox["latmin", region] & lat <= bbox["latmax", region], ]
+  clim <- clim[, lapply(.SD, mean), by = c("date")]
+  clim[, ex := roll_mean((temp - thresh), n = 30, align = "center"), by = .(lon, lat)]
+  clim[, c("lon", "lat", "doy", "temp", "seas", "thresh") := NULL]
+
+  setkey(ke, date)
+  setkey(clim, date)
+  dat <- clim[ke, nomatch = 0]
+  dat <- na.omit(dat)
+  return(dat)
+}
+
+AC.ts <- make_ts("AC")
+BC.ts <- make_ts("BC")
+EAC.ts <- make_ts("EAC")
+GS.ts <- make_ts("GS")
+KC.ts <- make_ts("KC")
+
+# # check for autocorreltion using 'auto.arima()' in the 'forecast' package...
+# library(forecast)
+#
+# auto.arima(AC.ts$eke_roll2, max.p = 3, max.q = 3, stationary = FALSE,
+#            seasonal = FALSE)
+
+# apply pre-whitening to the data; this effectively removes the above
+# autocorrelation structure and the residuals are then used for the remainder
+# of the analyses; this allows us to easily identify the embedded spectral
+# frequencies
+
+
+# ts <- EAC.ts
+
+wl_plts <- function(ts, region) {
+  ts <- as.data.frame(ts)
+  ts$n <- c(1:nrow(ts))
+
+  # first the exceedence data
+  ts.ex <- prewhiteAR(ts[,c("n", "ex")], order = 3, method = "ols", aic = TRUE,
+                      genplot = FALSE, verbose = FALSE)
+  colnames(ts.ex) <- c("seq", "ex")
+  row.names(ts.ex) <- ts$date[4:nrow(ts)]
+
+  # then the eke data
+  ts.eke <- prewhiteAR(ts[,c("n", "eke")], order = 3, method = "ols", aic = TRUE,
+                       genplot = FALSE, verbose = FALSE)
+  colnames(ts.eke) <- c("seq", "eke")
+  row.names(ts.eke) <- ts$date[4:nrow(ts)]
+
+  # using modified function to stop annoying default behaviour
+  # (see inside 'functions.R')
+  wl.ex <- analyze.wavelet_(ts.ex, my.series = "ex", loess.span = 0, dt = 1,
+                            dj = 1/50, lowerPeriod = 6, make.pval = TRUE, n.sim = 50,
+                            method = "white.noise", verbose = FALSE)
+  wl.eke <- analyze.wavelet_(ts.eke, "eke", loess.span = 0, dt = 1,
+                             dj = 1/25, lowerPeriod = 6, make.pval = TRUE, n.sim = 50,
+                             method = "white.noise", verbose = FALSE)
+
+  # plot the wavelets
+  wl.dir <- "figures"
+  pdf(file = paste0(wl.dir, "/", region, "-wavelets.pdf"), width = 12.0, height = 7.0)
+  par(mfrow = c(2, 1),
+      mar = c(4, 4.5, 3, 1))
+
+  wt.image(wl.ex, my.series = "ex", siglvl = 0.05, col.contour = "black", color.key = "quantile",
+           legend.params = list(lab = "wavelet power levels", label.digits = 2, shrink = 1.0),
+           timelab = "Days since 1993-01-01", periodlab = "Period", lwd = 1, graphics.reset = FALSE,
+           main = "Exceedence")
+  wt.image(wl.eke, my.series = "eke", siglvl = 0.05, col.contour = "black", color.key = "quantile",
+           legend.params = list(lab = "wavelet power levels", label.digits = 2, shrink = 1.0),
+           timelab = "Days since 1993-01-01", periodlab = "Period", lwd = 1, main = "Kinetic energy")
+  dev.off()
+
+}
+
+wl_plts(AC.ts, "AC")
+wl_plts(BC.ts, "BC")
+wl_plts(EAC.ts, "EAC")
+wl_plts(GS.ts, "GS")
+wl_plts(KC.ts, "KC")
