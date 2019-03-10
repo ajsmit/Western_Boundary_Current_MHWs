@@ -156,11 +156,11 @@ mke_masks <- function(region){
               mke_75 = quantile(mke, probs = 0.75))
   # Screen out pixels accordingly
   mke_90 <- mke_mean %>% 
-    filter(mke_mean >= mke_perc$mke_90) %>% 
+    filter(mke >= mke_perc$mke_90) %>% 
     mutate(mke_90 = mke_perc$mke_90)
   mke_75 <- mke_mean %>% 
-    filter(mke_mean >= mke_perc$mke_75,
-           mke_mean < mke_perc$mke_90) %>% 
+    filter(mke >= mke_perc$mke_75,
+           mke < mke_perc$mke_90) %>% 
     mutate(mke_75 = mke_perc$mke_75)
   # Combine and save
   mke_masks <- list(mke_90 = mke_90,
@@ -173,38 +173,60 @@ mke_masks <- function(region){
 
 # Calculate cooccurrence and correlation ----------------------------------
 
+# testers...
+# region <- "EAC"
+
 meander_cor_calc <- function(region){
   # Load AVISO, MHW, and masks
   AVISO_KE <- readRDS(paste0("../data/WBC/AVISO_KE_",region,".Rds"))
   load(paste0("../data/WBC/MHW_sub_",region,".Rdata"))
   masks <- readRDS(paste0("../data/WBC/mke_masks_",region,".Rds"))
-  # Take only the MKE and MHW pixels in the 75th percentile mask
-  # and only days when MKE is in the 90th percentile
-  # First grab MHW as this will be left_join to AVISO
-  MHW_75 <- MHW_sub %>% 
+
+  # First grab MHW as this will be left_join() to AVISO data
+  MHW_75 <- MHW_sub %>%
+    select(-cat) %>% 
     unnest(event) %>% 
     filter(row_number() %% 2 == 1) %>% 
     unnest(event) %>% 
     filter(lon %in% masks$mke_75$lon,
            lat %in% masks$mke_75$lat) %>% 
-    select(lon, lat, t, temp, seas, thresh, event) %>% 
+    select(lon, lat, t, temp, seas, thresh, event, event_no) %>% 
     group_by(lon, lat) %>% 
+    filter(event == TRUE) %>%
+    mutate(intensity = temp-thresh)
+    # mutate(event_days = n())
+  
   # Then create the base for the calculations
-  AVISO_75 <- AVISO_ke %>% 
+  AVISO_75 <- AVISO_KE %>% 
     filter(lon %in% masks$mke_75$lon,
            lat %in% masks$mke_75$lat) %>% 
-    group_by(lon, lat) %>% 
-    left_join(MHW_75, by = c("lon", "lat", "t")) %>% 
-    mutate(count_all = n()) %>% 
-    filter(mke >= masks$mke_90$mke_90) %>% 
-    mutate(count_90 = n())
-    
+    left_join(MHW_75, by = c("lon", "lat", "t"))
   
-  # Take the days in the that are in the 90th percentile
-  # A count of how often this occurs when MHWs are occurring is made to find
-  # what the proportion of this occurence is.
-  # The MKE and mean intensities on days when MKE is in the 90th perc. 
-  # are then correlated.
-  # This result will help to illustrate the potential relationship between
-  # meanders and MHWs.
+  # Prep the data for further calculations
+  # Screening out MKE below 90th perc. and days with no MHWs
+  calc_base <- AVISO_75 %>% 
+    group_by(lon, lat) %>%
+    mutate(mke_days = n()) %>%
+    filter(mke >= masks$mke_90$mke_90[1]) %>%
+    mutate(mke_90_days = n()) %>% 
+    filter(event == TRUE) %>%
+    mutate(MHW_days = n())
+  
+  # Calculate the proportion of days when MKE is in the 
+  # 90th percentile and MHWs are occurring
+  cooccurrence <- calc_base %>% 
+    group_by(lon, lat, mke_days, mke_90_days, MHW_days) %>% 
+    summarise(cooc_flat = MHW_days[1]/mke_days[1],
+              cooc_90 = MHW_days[1]/mke_90_days[1])
+  
+  # Calculate correlations
+  correlations <- calc_base %>% 
+    group_by(lon, lat) %>% 
+    summarise(mke_intensity_r = cor(intensity, mke, use = "pairwise.complete.obs"))
+
+  # Merge and save
+  meander_res <- left_join(cooccurrence, correlations, by = c("lon", "lat"))
+  # mean(meander_res$cooc_flat)
+  # mean(meander_res$cooc_90)
+  saveRDS(meander_res, file = paste0("correlate/meander_res_",region,".Rds"))
 }

@@ -27,19 +27,10 @@ source("setup/meanderFunctions.R")
 # Set cores
 library(doMC); doMC::registerDoMC(cores = 50)
 
-## NB: This is too beefy to run in a for loop
-# Run sequentially
-# for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
-#   region <- colnames(bbox)[i]
-#   print(paste0("Began run on ",region," at ",Sys.time()))
-#   AVISO_KE_save(region)
-#   print(paste0("Finished run on ",region," at ",Sys.time()))
-#   Sys.sleep(10) # Let the server catch its breath
-# } #~10 -- 15 minutes per region
 # AVISO_KE_save(colnames(bbox)[1])
 # AVISO_KE_save(colnames(bbox)[2])
 # AVISO_KE_save(colnames(bbox)[3])
-AVISO_KE_save(colnames(bbox)[4])
+# AVISO_KE_save(colnames(bbox)[4])
 # AVISO_KE_save(colnames(bbox)[5])
 
 
@@ -49,12 +40,12 @@ AVISO_KE_save(colnames(bbox)[4])
 library(doMC); doMC::registerDoMC(cores = 50)
 
 # Run sequentially
-# for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
-#   region <- colnames(bbox)[i]
-#   print(paste0("Began run on ",region," at ",Sys.time()))
-#   mke_masks(region)
-#   print(paste0("Finished run on ",region," at ",Sys.time()))
-# }
+for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
+  region <- colnames(bbox)[i]
+  print(paste0("Began run on ",region," at ",Sys.time()))
+  mke_masks(region)
+  print(paste0("Finished run on ",region," at ",Sys.time()))
+}
 
 
 # Subsetting MHW results --------------------------------------------------
@@ -83,7 +74,13 @@ library(doMC); doMC::registerDoMC(cores = 50)
 # This result will help to illustrate the potential relationship between
 # meanders and MHWs.
 
+# Set cores
+library(doMC); doMC::registerDoMC(cores = 50)
+
+# plyr::ldply((colnames(bbox)[-6]), .fun = meander_cor_calc, .parallel = T)
+
 
 # Visualise results -------------------------------------------------------
 
+# Still need to make some quick ggplot maps of the co-occurrences and correlations
 
