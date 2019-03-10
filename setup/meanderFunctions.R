@@ -169,11 +169,6 @@ mke_masks <- function(region){
 }
 
 
-# ggplot(data = mke_masks$mke_75, aes(x = lon, y = lat)) +
-#   geom_tile(aes(fill = mke)) +
-#   scale_fill_viridis_c()
-
-
 # Calculate cooccurrence and correlation ----------------------------------
 
 # testers...
@@ -230,21 +225,8 @@ meander_cor_calc <- function(region){
 
   # Merge and save
   meander_res <- left_join(cooccurrence, correlations, by = c("lon", "lat"))
-  # mean(meander_res$cooc_flat)
-  # mean(meander_res$cooc_90)
   saveRDS(meander_res, file = paste0("correlate/meander_res_",region,".Rds"))
 }
-
-
-# ggplot(data = masks$mke_75, aes(x = lon, y = lat)) +
-#   geom_tile(aes(fill = mke)) +
-#   scale_fill_viridis_c()
-# AVISO_mean <- AVISO_75 %>%
-  # group_by(lon, lat) %>%
-  # summarise(mke = mean(mke, na.rm = T))
-# ggplot(data = AVISO_mean, aes(x = lon, y = lat)) +
-  # geom_tile(aes(fill = mke)) +
-  # scale_fill_viridis_c()
 
 
 # Visualise results -------------------------------------------------------
@@ -256,6 +238,8 @@ meander_vis <- function(region){
   coords <- bbox[colnames(bbox) == region][1:4,]
   if(coords[3] > 180) coords[3] <- coords[3]-360
   if(coords[4] > 180) coords[4] <- coords[4]-360
+  fig_height <- length(seq(coords[1], coords[2], 1))/3
+  fig_width <- length(seq(coords[3], coords[4], 1))/5
   meander_res <- readRDS(paste0("correlate/meander_res_",region,".Rds")) %>% 
     ungroup() %>% 
     select(lon, lat, cooc_flat, cooc_90) %>% 
@@ -269,7 +253,9 @@ meander_vis <- function(region){
     labs(x = NULL, y = NULL) +
     ggtitle(region) +
     scale_fill_viridis_c("co-occurrence\nproportion") +
-    facet_wrap(~metric, ncol = 1)
-  ggsave(filename = paste0("figures/",region,"cooccurrence.pdf"), width = 6, height = 12)
+    facet_wrap(~metric, ncol = 1) +
+    theme(legend.position = "bottom")
+  ggsave(filename = paste0("figures/",region,"_cooccurrence.pdf"), 
+         width = fig_width, height = fig_height)
 }
 
