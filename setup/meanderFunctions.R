@@ -139,9 +139,7 @@ MHW_sub_save <- function(region){
 # Create MKE percentile masks ---------------------------------------------
 
 # testers...
-# load(paste0("../data/WBC/AVISO_KE_EAC.Rdata"))
-# df <- AVISO_KE
-# rm(AVISO_EKE)
+# region <- "AC"
 
 mke_masks <- function(region){
   AVISO_KE <- readRDS(paste0("../data/WBC/AVISO_KE_",region,".Rds"))
@@ -171,6 +169,11 @@ mke_masks <- function(region){
 }
 
 
+# ggplot(data = mke_masks$mke_75, aes(x = lon, y = lat)) +
+#   geom_tile(aes(fill = mke)) +
+#   scale_fill_viridis_c()
+
+
 # Calculate cooccurrence and correlation ----------------------------------
 
 # testers...
@@ -188,19 +191,20 @@ meander_cor_calc <- function(region){
     unnest(event) %>% 
     filter(row_number() %% 2 == 1) %>% 
     unnest(event) %>% 
-    filter(lon %in% masks$mke_75$lon,
-           lat %in% masks$mke_75$lat) %>% 
+    filter(paste(lon, lat) %in% paste(masks$mke_75$lon, 
+                                      masks$mke_75$lat)) %>% 
     select(lon, lat, t, temp, seas, thresh, event, event_no) %>% 
     group_by(lon, lat) %>% 
     filter(event == TRUE) %>%
     mutate(intensity = temp-thresh)
-    # mutate(event_days = n())
+  rm(MHW_sub)
   
   # Then create the base for the calculations
   AVISO_75 <- AVISO_KE %>% 
-    filter(lon %in% masks$mke_75$lon,
-           lat %in% masks$mke_75$lat) %>% 
+    filter(paste(lon, lat) %in% paste(masks$mke_75$lon, 
+                                      masks$mke_75$lat)) %>% 
     left_join(MHW_75, by = c("lon", "lat", "t"))
+  rm(AVISO_KE)
   
   # Prep the data for further calculations
   # Screening out MKE below 90th perc. and days with no MHWs
@@ -230,3 +234,42 @@ meander_cor_calc <- function(region){
   # mean(meander_res$cooc_90)
   saveRDS(meander_res, file = paste0("correlate/meander_res_",region,".Rds"))
 }
+
+
+# ggplot(data = masks$mke_75, aes(x = lon, y = lat)) +
+#   geom_tile(aes(fill = mke)) +
+#   scale_fill_viridis_c()
+# AVISO_mean <- AVISO_75 %>%
+  # group_by(lon, lat) %>%
+  # summarise(mke = mean(mke, na.rm = T))
+# ggplot(data = AVISO_mean, aes(x = lon, y = lat)) +
+  # geom_tile(aes(fill = mke)) +
+  # scale_fill_viridis_c()
+
+
+# Visualise results -------------------------------------------------------
+
+# testers...
+# region <- "GS"
+
+meander_vis <- function(region){
+  coords <- bbox[colnames(bbox) == region][1:4,]
+  if(coords[3] > 180) coords[3] <- coords[3]-360
+  if(coords[4] > 180) coords[4] <- coords[4]-360
+  meander_res <- readRDS(paste0("correlate/meander_res_",region,".Rds")) %>% 
+    ungroup() %>% 
+    select(lon, lat, cooc_flat, cooc_90) %>% 
+    gather(key = metric, value = val, -lon, -lat) %>% 
+    mutate(lon = ifelse(lon > 180, lon-360, lon),
+           lat = ifelse(lat > 180, lat-360, lat))
+  ggplot(meander_res, aes(x = lon, y = lat)) +
+    geom_tile(aes(fill = val), alpha = 0.7) +
+    borders(fill = "grey80", colour = "black") +
+    coord_equal(xlim = c(coords[3:4]), ylim = c(coords[1:2])) +
+    labs(x = NULL, y = NULL) +
+    ggtitle(region) +
+    scale_fill_viridis_c("co-occurrence\nproportion") +
+    facet_wrap(~metric, ncol = 1)
+  ggsave(filename = paste0("figures/",region,"cooccurrence.pdf"), width = 6, height = 12)
+}
+
