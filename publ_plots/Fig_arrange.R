@@ -49,35 +49,35 @@ Fig.2 <- ggarrange(AC.poly.plt,
 ggplot2::ggsave("publ_plots/Figure_2.jpg",
                 width = 3.5 * (1/3), height = 13 * (1/3), scale = 3.7)
 
-# Figure 3. Trends of MHW metrics mean intensity and frequency of selected WBCs… [duration trends not strongly associated with KE features or with regions where the MHWs are most intense.]
-Fig.3 <- ggarrange(AC.Fig010 + labs(title = "Mean MHW intensity trend"), AC.Fig016_v2 + labs(title = "MHW count trend"),
-                   BC.Fig010 + labs(title = ""), BC.Fig016_v2 + labs(title = ""),
-                   EAC.Fig010 + labs(title = ""), EAC.Fig016_v2 + labs(title = ""),
-                   GS.Fig010 + labs(title = ""), GS.Fig016_v2 + labs(title = ""),
-                   KC.Fig010 + labs(title = ""), KC.Fig016_v2 + labs(title = ""),
-                   ncol = 2, nrow = 5, labels = "auto")
-ggplot2::ggsave("publ_plots/Figure_3.jpg",
-                width = 7.0 * (1/3), height = 13 * (1/3), scale = 3.7)
-
-# •	Suppl. Fig. 3. Full set of panels matching Fig. 3, including also trend in duration.
-Supp.3 <- ggarrange(AC.Fig010 + labs(title = "MHW mean int. trend"), AC.Fig016_v2 + labs(title = "MHW count trend"), AC.Fig013_v2 + labs(title = "MHW duration trend"),
-                    BC.Fig010 + labs(title = ""), BC.Fig016_v2 + labs(title = ""), BC.Fig013_v2 + labs(title = ""),
-                    EAC.Fig010 + labs(title = ""), EAC.Fig016_v2 + labs(title = ""), EAC.Fig013_v2 + labs(title = ""),
-                    GS.Fig010 + labs(title = ""), GS.Fig016_v2 + labs(title = ""), GS.Fig013_v2 + labs(title = ""),
-                    KC.Fig010 + labs(title = ""), KC.Fig016_v2 + labs(title = ""), KC.Fig013_v2 + labs(title = ""),
-                    ncol = 3, nrow = 5, labels = "auto")
-ggplot2::ggsave("publ_plots/Suppl.Fig.3.jpg",
-                width = 10.5 * (1/3), height = 13 * (1/3), scale = 3.7)
-
-# Figure 4 | Pixel-by-pixel time series correlations between (a, c, e, g, i) MKE vs. mean MHW intensity, and (b, d, f, h, j) EKE vs. mean MHW intensity.
-Fig.4 <- ggarrange(AC.fig0x[[1]] + labs(title = "Mean kinetic energy"), AC.fig0x[[2]] + labs(title = "Eddy kinetic energy"),
+# Figure 3 | Pixel-by-pixel time series correlations between (a, c, e, g, i) MKE vs. mean MHW intensity, and (b, d, f, h, j) EKE vs. mean MHW intensity.
+Fig.3 <- ggarrange(AC.fig0x[[1]] + labs(title = "Mean kinetic energy"), AC.fig0x[[2]] + labs(title = "Eddy kinetic energy"),
                    BC.fig0x[[1]] + labs(title = ""), BC.fig0x[[2]] + labs(title = ""),
                    EAC.fig0x[[1]] + labs(title = ""), EAC.fig0x[[2]] + labs(title = ""),
                    GS.fig0x[[1]] + labs(title = ""), GS.fig0x[[2]] + labs(title = ""),
                    KC.fig0x[[1]] + labs(title = ""), KC.fig0x[[2]] + labs(title = ""),
                    ncol = 2, nrow = 5, labels = "auto")
+ggplot2::ggsave("publ_plots/Figure_3.jpg",
+                width = 7.0 * (1/3), height = 13 * (1/3), scale = 3.7)
+
+# Figure 4. Trends of MHW metrics mean intensity and frequency of selected WBCs… [duration trends not strongly associated with KE features or with regions where the MHWs are most intense.]
+Fig.4 <- ggarrange(AC.Fig010 + labs(title = "Mean MHW intensity trend"), AC.Fig016_v2 + labs(title = "MHW count trend"),
+                   BC.Fig010 + labs(title = ""), BC.Fig016_v2 + labs(title = ""),
+                   EAC.Fig010 + labs(title = ""), EAC.Fig016_v2 + labs(title = ""),
+                   GS.Fig010 + labs(title = ""), GS.Fig016_v2 + labs(title = ""),
+                   KC.Fig010 + labs(title = ""), KC.Fig016_v2 + labs(title = ""),
+                   ncol = 2, nrow = 5, labels = "auto")
 ggplot2::ggsave("publ_plots/Figure_4.jpg",
                 width = 7.0 * (1/3), height = 13 * (1/3), scale = 3.7)
+
+# •	Suppl. Fig. 4. Full set of panels matching Fig. 4, including also trend in duration.
+Supp.4 <- ggarrange(AC.Fig010 + labs(title = "MHW mean int. trend"), AC.Fig016_v2 + labs(title = "MHW count trend"), AC.Fig013_v2 + labs(title = "MHW duration trend"),
+                    BC.Fig010 + labs(title = ""), BC.Fig016_v2 + labs(title = ""), BC.Fig013_v2 + labs(title = ""),
+                    EAC.Fig010 + labs(title = ""), EAC.Fig016_v2 + labs(title = ""), EAC.Fig013_v2 + labs(title = ""),
+                    GS.Fig010 + labs(title = ""), GS.Fig016_v2 + labs(title = ""), GS.Fig013_v2 + labs(title = ""),
+                    KC.Fig010 + labs(title = ""), KC.Fig016_v2 + labs(title = ""), KC.Fig013_v2 + labs(title = ""),
+                    ncol = 3, nrow = 5, labels = "auto")
+ggplot2::ggsave("publ_plots/Suppl.Fig.4.jpg",
+                width = 10.5 * (1/3), height = 13 * (1/3), scale = 3.7)
 
 
 
