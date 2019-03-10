@@ -17,9 +17,6 @@ source("setup/regionDefinition.R")
 # The AVISO NetCDF files
 AVISO_files <- dir(path = "../data/AVISO", pattern = "CMEMS", full.names = T)
 
-# The AVISO region Rdata files
-AVISO_region_files <- dir(path = "../data/WBC", pattern = "AVISO_sub", full.names = T)
-
 # The MHW result files
 MHW_files <- dir(path = "../data/MHW", pattern = "MHW.calc.", full.names = T)
 
@@ -40,12 +37,14 @@ load("../tikoraluk/metadata/lon_OISST.RData")
 
 # Ease function for extracting AVISO variables
 AVISO_var <- function(file_name, var_id, coords){
+  
   # Define lon/lat ranges for extraction
   lat_range <- seq(coords[1]-0.125, coords[2]+0.125, 0.25)
   lon_range <- seq(coords[3]-0.125, coords[4]+0.125, 0.25)
   nc <- nc_open(as.character(file_name))
   lat_sub <- which(nc$dim$latitude$vals %in% lat_range)
   lon_sub <- which(nc$dim$longitude$vals %in% lon_range)
+  
   # Subset data
   res <- ncvar_get(nc, varid = var_id, 
                    start = c(lon_sub[1], lat_sub[1], 1),
@@ -54,6 +53,7 @@ AVISO_var <- function(file_name, var_id, coords){
                         lat = lat_range,
                         t = nc$dim$time$vals)
   nc_close(nc)
+  
   # Melt and finish
   res <- as.data.frame(reshape2::melt(res, value.name = var_id), row.names = NULL) %>% 
     mutate(t = as.Date(t, origin = "1950-01-01"))
@@ -62,11 +62,13 @@ AVISO_var <- function(file_name, var_id, coords){
 
 # Load AVSIO anomaly data and subset accordingly
 AVISO_sub_load <- function(file_name, coords){
+  
   # Extract the four desired variables
   ugos <- AVISO_var(file_name, "ugos", coords)
   vgos <- AVISO_var(file_name, "vgos", coords)
   ugosa <- AVISO_var(file_name, "ugosa", coords)
   vgosa <- AVISO_var(file_name, "vgosa", coords)
+  
   # Steek'im baiby
   res <- left_join(ugos, vgos, by = c("lon", "lat", "t")) %>% 
     left_join(ugosa, by = c("lon", "lat", "t")) %>% 
@@ -74,6 +76,7 @@ AVISO_sub_load <- function(file_name, coords){
   return(res)
 }
 
+# Calculate EKE and MKE
 # This is designed to run on a dataframe that has already been grouped by lon/lat
 AVISO_ke_calc <- function(df) {
   res <- df %>%
@@ -89,15 +92,19 @@ AVISO_ke_calc <- function(df) {
   return(res)
 }
 
-# Function for combining and saving the subsetted AVISO data
+# Function for combining and saving the subsetted AVISO KE data
 AVISO_KE_save <- function(region){
+  
+  # Determine the coordinates
   coords <- bbox[colnames(bbox) == region][1:4,]
+  
+  # Subset the AVISO data
   AVISO_sub <- plyr::ldply(AVISO_files,
                            .fun = AVISO_sub_load, 
                            .parallel = TRUE, 
                            coords = coords)
-  # save(AVISO_sub, file = paste0("../data/WBC/AVISO_sub_",region,".Rdata"))
-  Sys.sleep(10) # Let the server catch its breath
+  
+  # Calculate KE and save
   AVISO_KE <- plyr::ddply(AVISO_sub, .variables = c("lon", "lat"),
                           .fun = AVISO_ke_calc, .parallel = TRUE)
   rm(AVISO_sub)
@@ -111,7 +118,7 @@ AVISO_KE_save <- function(region){
 # testers...
 # file_name <- MHW_files_sub[1]
 
-# Load AVSIO anomaly data and subset accordingly
+# Wrapper function to load and subset MHW files by longitude slice
 MHW_sub_load <- function(file_name, lat_range){
   load(file_name)
   MHW_res_sub <- MHW_res %>% 
@@ -120,14 +127,16 @@ MHW_sub_load <- function(file_name, lat_range){
   return(MHW_res_sub)
 }
 
-# Function for combining and saving the subsetted AVISO data
+# Function for combining and saving the subsetted MHW data
 MHW_sub_save <- function(region){
+  
   # Define lon/lat ranges for extraction from sub files
   coords <- bbox[colnames(bbox) == region][1:4,]
   lat_range <- seq(coords[1]-0.125, coords[2]+0.125, 0.25)
   lon_range <- seq(coords[3]-0.125, coords[4]+0.125, 0.25)
   MHW_files_sub <- MHW_files[which(lon_OISST %in% lon_range)]
-  # Grab the data
+  
+  # Grab the data and save
   MHW_sub <- plyr::ldply(MHW_files_sub,
                          .fun = MHW_sub_load, 
                          .parallel = TRUE,
@@ -141,17 +150,23 @@ MHW_sub_save <- function(region){
 # testers...
 # region <- "AC"
 
+# Function for creating MKE masks
 mke_masks <- function(region){
+  
+  # Load the desired file
   AVISO_KE <- readRDS(paste0("../data/WBC/AVISO_KE_",region,".Rds"))
+  
   # Calculate mean MKE
   mke_mean <- AVISO_KE %>%
     group_by(lon, lat) %>%
     summarise(mke = mean(mke, na.rm = T))
+  
   # Find the 90t and 75th percentles for the region
   mke_perc <- mke_mean %>% 
     ungroup() %>% 
     summarise(mke_90 = quantile(mke, probs = 0.9),
               mke_75 = quantile(mke, probs = 0.75))
+  
   # Screen out pixels accordingly
   mke_90 <- mke_mean %>% 
     filter(mke >= mke_perc$mke_90) %>% 
@@ -160,6 +175,7 @@ mke_masks <- function(region){
     filter(mke >= mke_perc$mke_75,
            mke < mke_perc$mke_90) %>% 
     mutate(mke_75 = mke_perc$mke_75)
+  
   # Combine and save
   mke_masks <- list(mke_90 = mke_90,
                     mke_75 = mke_75)
@@ -175,6 +191,7 @@ mke_masks <- function(region){
 # region <- "EAC"
 
 meander_cor_calc <- function(region){
+  
   # Load AVISO, MHW, and masks
   AVISO_KE <- readRDS(paste0("../data/WBC/AVISO_KE_",region,".Rds"))
   load(paste0("../data/WBC/MHW_sub_",region,".Rdata"))
@@ -235,17 +252,23 @@ meander_cor_calc <- function(region){
 # region <- "GS"
 
 meander_vis <- function(region){
+  
+  # Determine coordinates and figure dimensions
   coords <- bbox[colnames(bbox) == region][1:4,]
   if(coords[3] > 180) coords[3] <- coords[3]-360
   if(coords[4] > 180) coords[4] <- coords[4]-360
   fig_height <- length(seq(coords[1], coords[2], 1))/3
   fig_width <- length(seq(coords[3], coords[4], 1))/5
+  
+  # Prep the data
   meander_res <- readRDS(paste0("correlate/meander_res_",region,".Rds")) %>% 
     ungroup() %>% 
     select(lon, lat, cooc_flat, cooc_90) %>% 
     gather(key = metric, value = val, -lon, -lat) %>% 
     mutate(lon = ifelse(lon > 180, lon-360, lon),
            lat = ifelse(lat > 180, lat-360, lat))
+  
+  # Create the figure and save
   ggplot(meander_res, aes(x = lon, y = lat)) +
     geom_tile(aes(fill = val), alpha = 0.7) +
     borders(fill = "grey80", colour = "black") +

@@ -11,10 +11,10 @@
 # With these databases recreated here, the next step is to re-calculate KE
 
 # With all of the results ready, the next step is to use the 90th perc.
-# EKE mask and the 75th perc. EKE mask to define the region within which 
-# we want to compare poleward velocity (U+V) and mean intensity
+# MKE mask and the 75th perc. MKE mask to define the region within which 
+# we want to compare MKE and MHW intensity
 
-# With the data masked the correlations may then be run
+# With the data masked the co-occurences and correlations may then be run
 
 
 # Functions ---------------------------------------------------------------
@@ -78,7 +78,6 @@ library(doMC); doMC::registerDoMC(cores = 50)
 library(doMC); doMC::registerDoMC(cores = 3)
 
 # plyr::ldply((colnames(bbox)[-6]), .fun = meander_cor_calc, .parallel = T)
-# meander_cor_calc("EAC")
 
 
 # Visualise results -------------------------------------------------------
