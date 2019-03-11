@@ -137,9 +137,9 @@ poly.plot <- function(region, plot.parameters) {
                  fill = alpha("gray50", 0.5), colour = "red3", size = 0.3) +
     geom_polygon(data = int90, aes(long, lat, group = group),
                  fill = alpha("#c83c7e", 1.0), colour = NA) +
-    geom_polygon(data = eke75, aes(long, lat, group = group),
-                 fill = alpha("gray50", 0.5), colour = "navy", size = 0.3,
-                 linetype = "dashed") +
+    # geom_polygon(data = eke75, aes(long, lat, group = group),
+    #              fill = alpha("gray50", 0.5), colour = "navy", size = 0.3,
+    #              linetype = "dashed") +
     geom_polygon(data = eke90, aes(long, lat, group = group),
                  fill = alpha("gray50", 0.5), colour = "navy", size = 0.3) +
     stat_contour(data = bathy, aes(x = lon, y = lat, z = z),
@@ -175,11 +175,28 @@ EAC.poly.plt <- poly.plot("EAC", EAC.layers)
 GS.poly.plt <- poly.plot("GS", GS.layers)
 KC.poly.plt <- poly.plot("KC", KC.layers)
 
-fig_masks <- ggarrange(AC.poly.plt,
-                       BC.poly.plt,
-                       EAC.poly.plt,
-                       GS.poly.plt,
-                       KC.poly.plt,
+bbox <- data.frame("AC" = c(-42.5, -40, 12.5, 15),
+                   "BC" = c(-40, -37.5, 305, 307.5),
+                   "EAC" = c( -37.5, -35, 152.5, 155),
+                   "GS" = c(40, 42.5, 295, 297.5),
+                   "KC" = c(40, 42.5, 145, 147.5),
+                   row.names = c("latmin", "latmax", "lonmin", "lonmax"))
+
+fig_masks <- ggarrange(AC.poly.plt + annotate("rect", xmin = bbox["lonmin", "AC"], xmax = bbox["lonmax", "AC"],
+                                              ymin = bbox["latmin", "AC"], ymax = bbox["latmax", "AC"],
+                                              col = "black", size = 0.4, fill = NA),
+                       BC.poly.plt + annotate("rect", xmin = bbox["lonmin", "BC"], xmax = bbox["lonmax", "BC"],
+                                              ymin = bbox["latmin", "BC"], ymax = bbox["latmax", "BC"],
+                                              col = "black", size = 0.4, fill = NA),
+                       EAC.poly.plt + annotate("rect", xmin = bbox["lonmin", "EAC"], xmax = bbox["lonmax", "EAC"],
+                                               ymin = bbox["latmin", "EAC"], ymax = bbox["latmax", "EAC"],
+                                               col = "black", size = 0.4, fill = NA),
+                       GS.poly.plt + annotate("rect", xmin = bbox["lonmin", "GS"], xmax = bbox["lonmax", "GS"],
+                                              ymin = bbox["latmin", "GS"], ymax = bbox["latmax", "GS"],
+                                              col = "black", size = 0.4, fill = NA),
+                       KC.poly.plt + annotate("rect", xmin = bbox["lonmin", "KC"], xmax = bbox["lonmax", "KC"],
+                                              ymin = bbox["latmin", "KC"], ymax = bbox["latmax", "KC"],
+                                              col = "black", size = 0.4, fill = NA),
                        ncol = 1, nrow = 5, labels = list("a", "b", "c", "d", "e"))
-ggplot2::ggsave("publ_plots/Figure_2_75eke.jpg",
+ggplot2::ggsave("publ_plots/Figure_2.jpg",
                 width = 3.5 * (1/3), height = 13 * (1/3), scale = 3.7)
