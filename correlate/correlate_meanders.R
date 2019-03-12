@@ -87,50 +87,64 @@ library(doMC); doMC::registerDoMC(cores = 50)
 # } # ~ 1 minute each
 
 
-# Correlate pixels --------------------------------------------------------
+# Mask regions ------------------------------------------------------------
 
-# In this final step we take only the MKE and MHW pixels that are in the 
+# In this step we take only the MKE and MHW pixels that are in the 
 # 50th percentile mask but not in the 90th percentile mask.
 # We also take the pixels that are in the 90th percentile max intensity mask.
-# We then take the days the pixels in the 50th perc. MKE and 90th perc. max int.
+# Set cores
+library(doMC); doMC::registerDoMC(cores = 50)
+
+# Run sequentially
+# for(i in 1:(ncol(bbox)-1)){
+# 
+#   # Determine region
+#   region <- colnames(bbox)[i]
+#   print(paste0("Began run on ",region," at ",Sys.time()))
+# 
+#   # Mask the regions
+#   mask_region(region)
+#   print(paste0("Finished run on ",region," at ",Sys.time()))
+# 
+#   # Clear up some RAM
+#   gc()
+# } # ~ 8 minutes each
+
+
+# Correlate pixels --------------------------------------------------------
+
+# here we take the days the pixels in the 50th perc. MKE and 90th perc. max int.
 # areas are themselves in the 90th percentile for MKE.
 # A count of how often this occurs when MHWs are occurring is made to find
 # what the proportion of this occurence is.
 # The MKE and mean intensities on days when MKE is in the 90th perc. 
 # are then correlated.
-# This result will help to illustrate the potential relationship between
+# This result helps to illustrate the potential relationship between
 # meanders and MHWs.
 
 # Set cores
-library(doMC); doMC::registerDoMC(cores = 5)
+library(doMC); doMC::registerDoMC(cores = 50)
 
 # Calculate the results in serial
-# for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
-#   region <- colnames(bbox)[i]
-#   print(paste0("Began run on ",region," at ",Sys.time()))
-#   meander_co_calc(region)
-#   print(paste0("Finished run on ",region," at ",Sys.time()))
-#   gc()
-# } # ~xxx seconds each
-
-
-# meander_co_calc(colnames(bbox)[1])
-# meander_co_calc(colnames(bbox)[2])
-# meander_co_calc(colnames(bbox)[3])
-# meander_co_calc(colnames(bbox)[4])
-# meander_co_calc(colnames(bbox)[5])
+for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
+  region <- colnames(bbox)[i]
+  print(paste0("Began run on ",region," at ",Sys.time()))
+  meander_co_calc(region)
+  print(paste0("Finished run on ",region," at ",Sys.time()))
+  gc()
+} # ~30 seconds each
 
 
 # Visualise results -------------------------------------------------------
 
 # A for loop for ease of creating all desired figures
-for(i in 1:(ncol(bbox)-1)){
-  region <- colnames(bbox)[i]
-  print(paste0("Began run on ",region," at ",Sys.time()))
-  meander_vis(region)
-  print(paste0("Finished run on ",region," at ",Sys.time()))
-  gc()
-} # ~xxx seconds each
+# for(i in 1:(ncol(bbox)-1)){
+#   region <- colnames(bbox)[i]
+#   print(paste0("Began run on ",region," at ",Sys.time()))
+#   meander_vis(region)
+#   print(paste0("Finished run on ",region," at ",Sys.time()))
+#   gc()
+# } # ~xxx seconds each
 
 # meander_vis(colnames(bbox)[1])
 # meander_vis(colnames(bbox)[2])

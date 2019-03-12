@@ -245,61 +245,69 @@ MHW_clim_sub <- function(df, mask_sub){
       select(-coord_index) %>% 
       filter(event == TRUE) %>%
       mutate(intensity = temp-thresh)
-  return(res)
+    return(res)
   }
 }
 
 # This function is designed to be passed ddply data grouped by c("lon", "lat")
-AVISO_join_sub <- function(AVISO, MHW, mask_sub){
+AVISO_KE_sub <- function(AVISO, mask_sub){
   
-  # Prepare filtering keys
-  setkey(AVISO, coord_index)
+  # Create coordinate indexes
   mask_sub$coord_index <- paste0(mask_sub$lon, mask_sub$lat)
+  AVISO$coord_index <- paste0(AVISO$lon, AVISO$lat)
   
-  # Fast filtering
-  AVISO_mask <- AVISO[mask_sub$coord_index]
-  
-  # Remove index columns
-  MHW <- select(MHW, -coord_index)
-  AVISO_mask <- select(AVISO_mask, -coord_index)
-  
-  # Join and exit
-  AVISO_join <- left_join(AVISO_mask, MHW, by = c("lon", "lat", "t"))
-  return(AVISO_join)
+  # Filter and join as required
+  if(AVISO$coord_index %in% mask_sub$coord_index){
+    res <- AVISO
+  return(res)
+  }
 }
 
 # Create the masked dataframes
-AVISO_mask <- function(region){
+mask_region <- function(region){
   
   # Load AVISO, MHW, and masks
-  AVISO_KE <- fread(paste0("../data/WBC/AVISO_KE_",region,".csv"))
-  MHW_clim <- fread(paste0("../data/WBC/MHW_clim_",region,".csv"))
+  AVISO_KE <- fread(paste0("../data/WBC/AVISO_KE_",region,".csv"), nThread = 10)
+  MHW_clim <- fread(paste0("../data/WBC/MHW_clim_",region,".csv"), nThread = 10)
   masks <- readRDS(paste0("masks/masks_",region,".Rds"))
   
   # First mask the MHW data as these will be left_join() to AVISO data
+  print("Filtering MHW data")
   MHW_50 <- plyr::ddply(MHW_clim, .variables = c("lon", "lat"), 
                         .fun = MHW_clim_sub, .parallel = T, mask_sub = masks$mke_50)
   MHW_max <- plyr::ddply(MHW_clim, .variables = c("lon", "lat"), 
                          .fun = MHW_clim_sub, .parallel = T, mask_sub = masks$max_90)
   rm(MHW_clim); gc()
   
-  # Then create the base for the calculations
+  # Then mask the AVISO data
+  print("Filtering AVISO data")
   AVISO_50 <- plyr::ddply(AVISO_KE, .variables = c("lon", "lat"), 
-                          .fun = AVISO_join_sub, .parallel = T, mask_sub = masks$mke_50)
-  
-  AVISO_50 <- AVISO_join_sub(AVISO_KE, MHW_50, masks$mke_50)
-  AVISO_max <- AVISO_join_sub(AVISO_KE, MHW_max, masks$max_90)
+                          .fun = AVISO_KE_sub, .parallel = T, mask_sub = masks$mke_50)
+  AVISO_max <- plyr::ddply(AVISO_KE, .variables = c("lon", "lat"), 
+                           .fun = AVISO_KE_sub, .parallel = T, mask_sub = masks$max_90)
   rm(AVISO_KE); gc()
+  
+  # Join and save
+  print("Joining data")
+  AVISO_MHW_50 <- left_join(AVISO_50, MHW_50, by = c("lon", "lat", "t"))
+  fwrite(AVISO_MHW_50, file = paste0("../data/WBC/AVISO_MHW_50_",region,".csv"), nThread = 10)
+  AVISO_MHW_max <- left_join(AVISO_max, MHW_max, by = c("lon", "lat", "t"))
+  fwrite(AVISO_MHW_max, file = paste0("../data/WBC/AVISO_MHW_max_",region,".csv"), nThread = 10)
+  rm(AVISO_MHW_50, AVISO_MHW_max); gc()
 }
+
 
 # Calculate cooccurrence and correlation ----------------------------------
 
+# testers...
+# region <- "AC"
+
 # Wrapper function for screening out days below the 90th MKE
-screen_90 <- function(df){
+screen_mke <- function(df, mke_val){
   res <- df %>% 
     group_by(lon, lat) %>%
     mutate(mke_days = n()) %>%
-    filter(mke >= masks$mke_90$mke_90[1]) %>%
+    filter(mke >= mke_val) %>%
     mutate(mke_90_days = n()) %>% 
     filter(event == TRUE) %>%
     mutate(MHW_days = n())
@@ -311,7 +319,7 @@ cooc_90 <- function(df){
   
   # Calculate co-occurrence by month
   res_month <- df %>% 
-    mutate(month = lubridate::month(t, label = T)) %>% 
+    mutate(month = as.character(lubridate::month(t, label = T))) %>% 
     group_by(lon, lat, month, mke_days, mke_90_days, MHW_days) %>% 
     summarise(cooc_flat = MHW_days[1]/mke_days[1],
               cooc_90 = MHW_days[1]/mke_90_days[1])
@@ -324,30 +332,53 @@ cooc_90 <- function(df){
               cooc_90 = MHW_days[1]/mke_90_days[1])
   
   # Combine and exit
-  res
+  res <- rbind(res_month, res_total)
+  return(res)
+}
+
+corr_calc <- function(df){
+  
+  # Calculate crrelations by month
+  res_month <- df %>% 
+    mutate(month = as.character(lubridate::month(t, label = T))) %>% 
+    group_by(lon, lat, month) %>% 
+    summarise(mke_intensity_r = cor(intensity, mke, use = "pairwise.complete.obs"))
+  
+  # Calculate total correlations
+  res_total <- df %>% 
+    mutate(month = "total") %>% 
+    group_by(lon, lat, month) %>% 
+    summarise(mke_intensity_r = cor(intensity, mke, use = "pairwise.complete.obs"))
+  
+  # Combine and exit
+  res <- rbind(res_month, res_total)
   return(res)
 }
 
 # Run all the calculations etc.
 meander_co_calc <- function(region){
   
+  # Load masked AVISO and MHW data as well as masks
+  AVISO_MHW_50 <- fread(paste0("../data/WBC/AVISO_MHW_50_",region,".csv"), nThread = 10)
+  AVISO_MHW_max <- fread(paste0("../data/WBC/AVISO_MHW_max_",region,".csv"), nThread = 10)
+  masks <- readRDS(paste0("masks/masks_",region,".Rds"))
+  
   # Prep the data for further calculations
   # Screening out MKE below 90th perc. and days with no MHWs
-  calc_50_base <- screen_90(AVISO_50)
-  calc_max_base <- screen_90(AVISO_max)
+  print("Screening by MKE")
+  calc_50_base <- screen_mke(AVISO_MHW_50, masks$mke_90$mke_90[1])
+  calc_max_base <- screen_mke(AVISO_MHW_max, masks$mke_90$mke_90[1])
   
   # Calculate the proportion of days when MKE is in the 
   # 90th percentile and MHWs are occurring
+  print("Calculating co-occurrence")
   cooc_50 <- cooc_90(calc_50_base)
   cooc_max <- cooc_90(calc_max_base)
   
   # Calculate correlations
-  corr_50 <- calc_50_base %>% 
-    group_by(lon, lat) %>% 
-    summarise(mke_intensity_r = cor(intensity, mke, use = "pairwise.complete.obs"))
-  corr_max <- calc_max_base %>% 
-    group_by(lon, lat) %>% 
-    summarise(mke_intensity_r = cor(intensity, mke, use = "pairwise.complete.obs"))
+  print("Calculating correlations")
+  corr_50 <- corr_calc(calc_50_base)
+  corr_max <- corr_calc(calc_max_base)
 
   # Merge, save, and clean up
   meander_res <- list(cooc_50 = cooc_50,
@@ -355,8 +386,8 @@ meander_co_calc <- function(region){
                       corr_50 = corr_50,
                       corr_max = corr_max)
   saveRDS(meander_res, file = paste0("correlate/meander_res_",region,".Rds"))
-  rm(AVISO_50, AVISO_max, calc_50_base, calc_max_base, cooc_50, cooc_max, 
-     corr_50, corr_max,meander_res); gc()
+  rm(AVISO_MHW_50, AVISO_MHW_max, calc_50_base, calc_max_base, 
+     cooc_50, cooc_max, corr_50, corr_max,meander_res); gc()
 }
 
 
@@ -364,7 +395,51 @@ meander_co_calc <- function(region){
 
 # testers...
 # region <- "GS"
+# df <- meander_res$corr_50
 
+# Quick list capable prep function for plotting consistency
+list_prep <- function(df){
+  if("cooc_flat" %in% colnames(df)){
+    res <- df %>% 
+      ungroup() %>% 
+      select(lon, lat, month, cooc_flat, cooc_90) %>% 
+      gather(key = metric, value = val, -lon, -lat, -month) %>% 
+      mutate(lon = ifelse(lon > 180, lon-360, lon),
+             lat = ifelse(lat > 180, lat-360, lat))
+  } else {
+    res <- df %>% 
+      dplyr::rename(val = mke_intensity_r) %>% 
+      mutate(metric = "mke_intensity_r")
+  }
+  # Not working for "total"...
+  res$month <- factor(res$month, levels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                            "Jul", "Aug", "sep", "Oct", "Nov", "Dec", "total"))
+  res$month[is.na(res$month)] <- "total"
+  return(res)
+}
+
+# Create a single faceted plot
+plot_res <- function(df, month_facet){
+  fig_res <- ggplot(df, aes(x = lon, y = lat)) +
+    geom_tile(aes(fill = val), alpha = 0.7) +
+    borders(fill = "grey80", colour = "black") +
+    coord_equal(xlim = c(coords[3:4]), ylim = c(coords[1:2])) +
+    labs(x = NULL, y = NULL) +
+    ggtitle(region) +
+    scale_fill_viridis_c("co-occurrence\nproportion") +
+    # facet_wrap(~metric, ncol = 1) +
+    theme(legend.position = "bottom")
+  if(month_facet){
+    fig_res_facet <- fig_res +
+      facet_wrap(month~metric, ncol = 6)
+  } else {
+    fig_res_facet <- fig_res +
+      facet_wrap(~metric, ncol = 1)
+  }
+  return(fig_res_facet)
+}
+
+# This function creates all of the current visual outputs
 meander_vis <- function(region){
   
   # Determine coordinates and figure dimensions
@@ -376,25 +451,18 @@ meander_vis <- function(region){
   
   # Prep the data
   meander_res <- readRDS(paste0("correlate/meander_res_",region,".Rds")) 
+  meander_prep <- lapply(meander_res, list_prep)
   
-  meander_50 <- left_join(meander_res$cooc)%>% 
-    ungroup() %>% 
-    select(lon, lat, cooc_flat, cooc_90) %>% 
-    gather(key = metric, value = val, -lon, -lat) %>% 
-    mutate(lon = ifelse(lon > 180, lon-360, lon),
-           lat = ifelse(lat > 180, lat-360, lat))
-  
-  # Create the figure and save
-  ggplot(meander_res, aes(x = lon, y = lat)) +
-    geom_tile(aes(fill = val), alpha = 0.7) +
-    borders(fill = "grey80", colour = "black") +
-    coord_equal(xlim = c(coords[3:4]), ylim = c(coords[1:2])) +
-    labs(x = NULL, y = NULL) +
-    ggtitle(region) +
-    scale_fill_viridis_c("co-occurrence\nproportion") +
-    facet_wrap(~metric, ncol = 1) +
-    theme(legend.position = "bottom")
-  ggsave(filename = paste0("figures/",region,"_cooccurrence.pdf"), 
+  # Create the total co-occurrence figure
+  cooc_50_total <- plot_res(filter(meander_prep$cooc_50, month == "total"), F)
+  # cooc_50_total
+  ggsave(cooc_50_total, filename = paste0("figures/",region,"_cooc_50_total.pdf"), 
          width = fig_width, height = fig_height)
+  
+  # Create the monthly co-occurence figure
+  cooc_50_month <- plot_res(filter(meander_50, month != "total"), T) 
+  # cooc_50_month
+  ggsave(cooc_50_month, filename = paste0("figures/",region,"_cooc_50_month.pdf"), 
+         width = fig_width*1.5, height = fig_height*2)
 }
 
