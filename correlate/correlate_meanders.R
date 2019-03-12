@@ -17,7 +17,7 @@
 # With the data masked the co-occurences and correlations may then be run
 
 # NB: This script is intended to be run via an R terminal
-# Therefore each different section should be (un)commented when desired
+  # Therefore each different section should be (un)commented when desired
 
 
 # Functions ---------------------------------------------------------------
@@ -52,13 +52,13 @@ library(doMC); doMC::registerDoMC(cores = 50)
 library(doMC); doMC::registerDoMC(cores = 50)
 
 # Subset MHW data
-for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
-  region <- colnames(bbox)[i]
-  print(paste0("Began run on ",region," at ",Sys.time()))
-  MHW_sub_save(region)
-  print(paste0("Finished run on ",region," at ",Sys.time()))
-  gc()
-}
+# for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
+#   region <- colnames(bbox)[i]
+#   print(paste0("Began run on ",region," at ",Sys.time()))
+#   MHW_sub_save(region)
+#   print(paste0("Finished run on ",region," at ",Sys.time()))
+#   gc()
+# } ~ 10 minutes each
 
 
 # Percentile masks --------------------------------------------------------
@@ -67,24 +67,24 @@ for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
 library(doMC); doMC::registerDoMC(cores = 50)
 
 # Run sequentially
-for(i in 1:(ncol(bbox)-1)){
-
-  # Determine region
-  region <- colnames(bbox)[i]
-  print(paste0("Began run on ",region," at ",Sys.time()))
-
-  # Load the desired files
-  AVISO_KE <- fread(paste0("../data/WBC/AVISO_KE_",region,".csv"))
-  MHW_event <- fread(paste0("../data/WBC/MHW_event_",region,".csv"))
-  print("Data loaded")
-
-  # Create the masks
-  masks(AVISO = AVISO_KE, MHW = MHW_event)
-  print(paste0("Finished run on ",region," at ",Sys.time()))
-
-  # Clear up some RAM
-  rm(AVISO_KE, MHW_sub); gc()
-} # ~ 1 minute each
+# for(i in 1:(ncol(bbox)-1)){
+# 
+#   # Determine region
+#   region <- colnames(bbox)[i]
+#   print(paste0("Began run on ",region," at ",Sys.time()))
+# 
+#   # Load the desired files
+#   AVISO_KE <- fread(paste0("../data/WBC/AVISO_KE_",region,".csv"))
+#   MHW_event <- fread(paste0("../data/WBC/MHW_event_",region,".csv"))
+#   print("Data loaded")
+# 
+#   # Create the masks
+#   masks(AVISO = AVISO_KE, MHW = MHW_event)
+#   print(paste0("Finished run on ",region," at ",Sys.time()))
+# 
+#   # Clear up some RAM
+#   rm(AVISO_KE, MHW_event); gc()
+# } # ~ 1 minute each
 
 
 # Correlate pixels --------------------------------------------------------
@@ -122,6 +122,15 @@ library(doMC); doMC::registerDoMC(cores = 5)
 
 
 # Visualise results -------------------------------------------------------
+
+# A for loop for ease of creating all desired figures
+for(i in 1:(ncol(bbox)-1)){
+  region <- colnames(bbox)[i]
+  print(paste0("Began run on ",region," at ",Sys.time()))
+  meander_vis(region)
+  print(paste0("Finished run on ",region," at ",Sys.time()))
+  gc()
+} # ~xxx seconds each
 
 # meander_vis(colnames(bbox)[1])
 # meander_vis(colnames(bbox)[2])

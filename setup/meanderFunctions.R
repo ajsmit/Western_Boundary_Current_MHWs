@@ -22,7 +22,7 @@ AVISO_files <- dir(path = "../data/AVISO", pattern = "CMEMS", full.names = T)
 MHW_files <- dir(path = "../data/MHW", pattern = "MHW.calc.", full.names = T)
 
 # The MHW region files
-MHW_region_files <- dir(path = "../data/WBC", pattern = "MHW_sub", full.names = T)
+MHW_clim_files <- dir(path = "../data/WBC", pattern = "MHW_clim", full.names = T)
 
 # The OISST lon index
 load("../tikoraluk/metadata/lon_OISST.RData")
@@ -155,7 +155,7 @@ MHW_sub_save <- function(region){
   MHW_event[,(cols) := round(.SD, 3), .SDcols = cols]
   
   # Create a clim data.frame
-  MHW_clim <- MHW_res_sub %>% 
+  MHW_clim <- MHW_sub %>% 
     select(-cat) %>%
     unnest(event) %>% 
     filter(row_number() %% 2 == 1) %>%
@@ -223,21 +223,76 @@ masks <- function(AVISO, MHW){
 }
 
 
-# Calculate cooccurrence and correlation ----------------------------------
+# Mask AVISO and MHW data -------------------------------------------------
 
 # testers...
 # region <- "EAC"
-# df <- slice(MHW_sub, 1)
+# df <- AVISO_KE
+# mask_sub <- masks$mke_50
+# AVISO <- AVISO_KE
+# MHW <- MHW_50
 
-# Wrapper function to run on MHW results
+# This function is designed to be passed ddply data grouped by c("lon", "lat")
 MHW_clim_sub <- function(df, mask_sub){
-  res <- df %>%
-  filter(paste(lon, lat) %in% paste(mask_sub$lon,
-                                    mask_sub$lat)) %>% 
-  filter(event == TRUE) %>%
-  mutate(intensity = temp-thresh)
+  
+  # Create coordinate indexes
+  mask_sub$coord_index <- paste0(mask_sub$lon, mask_sub$lat)
+  df$coord_index <- paste0(df$lon, df$lat)
+  
+  # Filter by event column if the data are within the mask
+  if(df$coord_index %in% mask_sub$coord_index){
+    res <- df %>% 
+      select(-coord_index) %>% 
+      filter(event == TRUE) %>%
+      mutate(intensity = temp-thresh)
   return(res)
+  }
 }
+
+# This function is designed to be passed ddply data grouped by c("lon", "lat")
+AVISO_join_sub <- function(AVISO, MHW, mask_sub){
+  
+  # Prepare filtering keys
+  setkey(AVISO, coord_index)
+  mask_sub$coord_index <- paste0(mask_sub$lon, mask_sub$lat)
+  
+  # Fast filtering
+  AVISO_mask <- AVISO[mask_sub$coord_index]
+  
+  # Remove index columns
+  MHW <- select(MHW, -coord_index)
+  AVISO_mask <- select(AVISO_mask, -coord_index)
+  
+  # Join and exit
+  AVISO_join <- left_join(AVISO_mask, MHW, by = c("lon", "lat", "t"))
+  return(AVISO_join)
+}
+
+# Create the masked dataframes
+AVISO_mask <- function(region){
+  
+  # Load AVISO, MHW, and masks
+  AVISO_KE <- fread(paste0("../data/WBC/AVISO_KE_",region,".csv"))
+  MHW_clim <- fread(paste0("../data/WBC/MHW_clim_",region,".csv"))
+  masks <- readRDS(paste0("masks/masks_",region,".Rds"))
+  
+  # First mask the MHW data as these will be left_join() to AVISO data
+  MHW_50 <- plyr::ddply(MHW_clim, .variables = c("lon", "lat"), 
+                        .fun = MHW_clim_sub, .parallel = T, mask_sub = masks$mke_50)
+  MHW_max <- plyr::ddply(MHW_clim, .variables = c("lon", "lat"), 
+                         .fun = MHW_clim_sub, .parallel = T, mask_sub = masks$max_90)
+  rm(MHW_clim); gc()
+  
+  # Then create the base for the calculations
+  AVISO_50 <- plyr::ddply(AVISO_KE, .variables = c("lon", "lat"), 
+                          .fun = AVISO_join_sub, .parallel = T, mask_sub = masks$mke_50)
+  
+  AVISO_50 <- AVISO_join_sub(AVISO_KE, MHW_50, masks$mke_50)
+  AVISO_max <- AVISO_join_sub(AVISO_KE, MHW_max, masks$max_90)
+  rm(AVISO_KE); gc()
+}
+
+# Calculate cooccurrence and correlation ----------------------------------
 
 # Wrapper function for screening out days below the 90th MKE
 screen_90 <- function(df){
@@ -253,36 +308,28 @@ screen_90 <- function(df){
 
 # Wrapper function for finding co-occurrence rates
 cooc_90 <- function(df){
-  res <- df %>% 
-    group_by(lon, lat, mke_days, mke_90_days, MHW_days) %>% 
+  
+  # Calculate co-occurrence by month
+  res_month <- df %>% 
+    mutate(month = lubridate::month(t, label = T)) %>% 
+    group_by(lon, lat, month, mke_days, mke_90_days, MHW_days) %>% 
     summarise(cooc_flat = MHW_days[1]/mke_days[1],
               cooc_90 = MHW_days[1]/mke_90_days[1])
+  
+  # Calculate total co-occurrence
+  res_total <- df %>% 
+    mutate(month = "total") %>% 
+    group_by(lon, lat, month, mke_days, mke_90_days, MHW_days) %>% 
+    summarise(cooc_flat = MHW_days[1]/mke_days[1],
+              cooc_90 = MHW_days[1]/mke_90_days[1])
+  
+  # Combine and exit
+  res
   return(res)
 }
 
 # Run all the calculations etc.
 meander_co_calc <- function(region){
-  
-  # Load AVISO, MHW, and masks
-  AVISO_KE <- fread(paste0("../data/WBC/AVISO_KE_",region,".csv"))
-  MHW_clim <- fread(paste0("../data/WBC/MHW_clim_",region,".csv"))
-  masks <- readRDS(paste0("masks/masks_",region,".Rds"))
-
-  # First grab MHW as this will be left_join() to AVISO data
-  MHW_50 <- MHW_clim_sub(MHW_clim, masks$mke_50)
-  MHW_max <- MHW_clim_sub(MHW_clim, masks$max_90)
-  rm(MHW_clim); gc()
-  
-  # Then create the base for the calculations
-  AVISO_50 <- AVISO_KE %>% 
-    filter(paste(lon, lat) %in% paste(masks$mke_50$lon, 
-                                      masks$mke_50$lat)) %>% 
-    left_join(MHW_50, by = c("lon", "lat", "t"))
-  AVISO_max <- AVISO_KE %>% 
-    filter(paste(lon, lat) %in% paste(masks$max_90$lon, 
-                                      masks$max_90$lat)) %>% 
-    left_join(MHW_max, by = c("lon", "lat", "t"))
-  rm(AVISO_KE); gc()
   
   # Prep the data for further calculations
   # Screening out MKE below 90th perc. and days with no MHWs
