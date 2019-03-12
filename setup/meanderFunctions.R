@@ -6,6 +6,7 @@
 library(tidyverse)
 library(ncdf4)
 library(RcppRoll)
+library(data.table)
 library(doMC); doMC::registerDoMC(cores = 50)
 
 
@@ -73,6 +74,7 @@ AVISO_sub_load <- function(file_name, coords){
   res <- left_join(ugos, vgos, by = c("lon", "lat", "t")) %>% 
     left_join(ugosa, by = c("lon", "lat", "t")) %>% 
     left_join(vgosa, by = c("lon", "lat", "t"))
+  rm(ugos, vgos, ugosa, vgosa); gc()
   return(res)
 }
 
@@ -107,9 +109,9 @@ AVISO_KE_save <- function(region){
   # Calculate KE and save
   AVISO_KE <- plyr::ddply(AVISO_sub, .variables = c("lon", "lat"),
                           .fun = AVISO_ke_calc, .parallel = TRUE)
-  rm(AVISO_sub)
-  saveRDS(AVISO_KE, file = paste0("../data/WBC/AVISO_KE_",region,".Rds"))
-  rm(AVISO_KE)
+  rm(AVISO_sub); gc()
+  fwrite(AVISO_KE, file = paste0("../data/WBC/AVISO_KE_",region,".csv"), nThread = 10)
+  rm(AVISO_KE); gc()
 }
 
 
@@ -123,7 +125,7 @@ MHW_sub_load <- function(file_name, lat_range){
   load(file_name)
   MHW_res_sub <- MHW_res %>% 
     filter(lat %in% lat_range)
-  rm(MHW_res)
+  rm(MHW_res); gc()
   return(MHW_res_sub)
 }
 
@@ -141,7 +143,33 @@ MHW_sub_save <- function(region){
                          .fun = MHW_sub_load, 
                          .parallel = TRUE,
                          lat_range = lat_range)
-  save(MHW_sub, file = paste0("../data/WBC/MHW_sub_",region,".Rdata"))
+  
+  # Create an event data.frame
+  MHW_event <- MHW_sub %>% 
+    select(-cat) %>% 
+    unnest(event) %>% 
+    filter(row_number() %% 2 == 0) %>% 
+    unnest(event) %>% 
+    as.data.table()
+  cols <- names(MHW_event)[11:24]
+  MHW_event[,(cols) := round(.SD, 3), .SDcols = cols]
+  
+  # Create a clim data.frame
+  MHW_clim <- MHW_res_sub %>% 
+    select(-cat) %>%
+    unnest(event) %>% 
+    filter(row_number() %% 2 == 1) %>%
+    unnest(event) %>%
+    select(lon, lat, t, temp, seas, thresh, event, event_no) %>% 
+    as.data.table()
+  cols <- names(MHW_clim)[5:6]
+  MHW_clim[,(cols) := round(.SD, 3), .SDcols = cols]
+
+  # Save
+  rm(MHW_sub); gc()
+  fwrite(MHW_event, file = paste0("../data/WBC/MHW_event_",region,".csv"), nThread = 10)
+  fwrite(MHW_clim, file = paste0("../data/WBC/MHW_clim_",region,".csv"), nThread = 10)
+  rm(MHW_event, MHW_clim); gc()
 }
 
 
@@ -150,7 +178,7 @@ MHW_sub_save <- function(region){
 # testers...
 # region <- "AC"
 # AVISO <- AVISO_KE
-# MHW <- MHW_sub
+# MHW <- MHW_event
 
 # Function for creating MKE and max intensity masks
 # It expects to be given the AVISO and MHW data as dataframes
@@ -158,10 +186,6 @@ masks <- function(AVISO, MHW){
   
   # Find pixels with 90th percentile for max int.
   max_90 <- MHW %>% 
-    select(-cat) %>% 
-    unnest(event) %>% 
-    filter(row_number() %% 2 == 0) %>% 
-    unnest(event) %>% 
     group_by(lon, lat) %>%
     summarise(intensity_max = max(intensity_max, na.rm = T)) %>% 
     mutate(max_90 = quantile(intensity_max, probs = 0.9)) %>% 
@@ -194,7 +218,7 @@ masks <- function(AVISO, MHW){
                 max_90 = max_90)
   # rm(AVISO_KE)
   saveRDS(masks, file = paste0("masks/masks_",region,".Rds"))
-  rm(masks)
+  rm(masks); gc()
   return()
 }
 
@@ -210,11 +234,6 @@ MHW_clim_sub <- function(df, mask_sub){
   res <- df %>%
   filter(paste(lon, lat) %in% paste(mask_sub$lon,
                                     mask_sub$lat)) %>% 
-  select(-cat) %>%
-  unnest(event) %>% 
-  filter(row_number() %% 2 == 1) %>%
-  unnest(event) %>%
-  select(lon, lat, t, temp, seas, thresh, event, event_no) %>%
   filter(event == TRUE) %>%
   mutate(intensity = temp-thresh)
   return(res)
@@ -245,14 +264,14 @@ cooc_90 <- function(df){
 meander_co_calc <- function(region){
   
   # Load AVISO, MHW, and masks
-  AVISO_KE <- readRDS(paste0("../data/WBC/AVISO_KE_",region,".Rds"))
-  load(paste0("../data/WBC/MHW_sub_",region,".Rdata"))
+  AVISO_KE <- fread(paste0("../data/WBC/AVISO_KE_",region,".csv"))
+  MHW_clim <- fread(paste0("../data/WBC/MHW_clim_",region,".csv"))
   masks <- readRDS(paste0("masks/masks_",region,".Rds"))
 
   # First grab MHW as this will be left_join() to AVISO data
-  MHW_50 <- MHW_clim_sub(MHW_sub, masks$mke_50)
-  MHW_max <- MHW_clim_sub(MHW_sub, masks$max_90)
-  rm(MHW_sub); gc()
+  MHW_50 <- MHW_clim_sub(MHW_clim, masks$mke_50)
+  MHW_max <- MHW_clim_sub(MHW_clim, masks$max_90)
+  rm(MHW_clim); gc()
   
   # Then create the base for the calculations
   AVISO_50 <- AVISO_KE %>% 
@@ -283,13 +302,14 @@ meander_co_calc <- function(region){
     group_by(lon, lat) %>% 
     summarise(mke_intensity_r = cor(intensity, mke, use = "pairwise.complete.obs"))
 
-  # Merge and save
+  # Merge, save, and clean up
   meander_res <- list(cooc_50 = cooc_50,
                       cooc_max = cooc_max,
                       corr_50 = corr_50,
                       corr_max = corr_max)
   saveRDS(meander_res, file = paste0("correlate/meander_res_",region,".Rds"))
-  return("Klaar")
+  rm(AVISO_50, AVISO_max, calc_50_base, calc_max_base, cooc_50, cooc_max, 
+     corr_50, corr_max,meander_res); gc()
 }
 
 

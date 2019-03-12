@@ -30,18 +30,6 @@ source("setup/meanderFunctions.R")
 # Set cores
 library(doMC); doMC::registerDoMC(cores = 50)
 
-# AVISO_KE_save(colnames(bbox)[1])
-AVISO_KE_save(colnames(bbox)[2])
-# AVISO_KE_save(colnames(bbox)[3])
-# AVISO_KE_save(colnames(bbox)[4])
-# AVISO_KE_save(colnames(bbox)[5])
-
-
-# Percentile masks --------------------------------------------------------
-
-# Set cores
-library(doMC); doMC::registerDoMC(cores = 50)
-
 # Run sequentially
 # for(i in 1:(ncol(bbox)-1)){
 # 
@@ -49,19 +37,13 @@ library(doMC); doMC::registerDoMC(cores = 50)
 #   region <- colnames(bbox)[i]
 #   print(paste0("Began run on ",region," at ",Sys.time()))
 # 
-#   # Load the desired files
-#   AVISO_KE <- readRDS(paste0("../data/WBC/AVISO_KE_",region,".Rds"))
-#   load(paste0("../data/WBC/MHW_sub_",region,".Rdata"))
-#   print("Data loaded")
-# 
 #   # Create the masks
-#   masks(AVISO = AVISO_KE, MHW = MHW_sub)
+#   AVISO_KE_save(colnames(bbox)[i])
 #   print(paste0("Finished run on ",region," at ",Sys.time()))
 # 
 #   # Clear up some RAM
-#   rm(AVISO_KE, MHW_sub)
 #   gc()
-# } # ~ 1 minute each
+# } # ~ 13 minute each
 
 
 # Subsetting MHW results --------------------------------------------------
@@ -70,13 +52,39 @@ library(doMC); doMC::registerDoMC(cores = 50)
 library(doMC); doMC::registerDoMC(cores = 50)
 
 # Subset MHW data
-# for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
-#   region <- colnames(bbox)[i]
-#   print(paste0("Began run on ",region," at ",Sys.time()))
-#   MHW_sub_save(region)
-#   print(paste0("Finished run on ",region," at ",Sys.time()))
-#   gc()
-# }
+for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
+  region <- colnames(bbox)[i]
+  print(paste0("Began run on ",region," at ",Sys.time()))
+  MHW_sub_save(region)
+  print(paste0("Finished run on ",region," at ",Sys.time()))
+  gc()
+}
+
+
+# Percentile masks --------------------------------------------------------
+
+# Set cores
+library(doMC); doMC::registerDoMC(cores = 50)
+
+# Run sequentially
+for(i in 1:(ncol(bbox)-1)){
+
+  # Determine region
+  region <- colnames(bbox)[i]
+  print(paste0("Began run on ",region," at ",Sys.time()))
+
+  # Load the desired files
+  AVISO_KE <- fread(paste0("../data/WBC/AVISO_KE_",region,".csv"))
+  MHW_event <- fread(paste0("../data/WBC/MHW_event_",region,".csv"))
+  print("Data loaded")
+
+  # Create the masks
+  masks(AVISO = AVISO_KE, MHW = MHW_event)
+  print(paste0("Finished run on ",region," at ",Sys.time()))
+
+  # Clear up some RAM
+  rm(AVISO_KE, MHW_sub); gc()
+} # ~ 1 minute each
 
 
 # Correlate pixels --------------------------------------------------------
