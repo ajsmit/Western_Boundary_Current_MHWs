@@ -137,6 +137,38 @@ library(doMC); doMC::registerDoMC(cores = 50)
 
 # Visualise results -------------------------------------------------------
 
+# Here is the naming convention for the figures produced below:
+
+# region_finalStatistic_pixelFilter_timeUnit.pdf
+
+# region: the acronym for the study region of interest
+
+# finalStatistic: The result being shown. Presently all of the figures I've uploaded
+# will say "cooc" here. 
+# This stands for co-occurrence and the figures show the rate of co-occurence 
+# of the proportion of days when MWHs are occurring in a pixel against the total
+# number of days in that pixel (0 = none, 1 = perfect) 
+
+# pixelFilter: This will say either "50" or "max"
+# 50 means that only pixels that are within the 50th to 90th percentile for 
+# mean MKE in the region are being shown
+# max means that only pixels that have had events whose max intensity is in
+# the 90th percentile for the study region are being shown
+
+# timeUnit: This shows if the figure is showing the "total" number of days
+# or if it is showing "month" facets.
+# Because there was no apparent monthly pattern I didn't save all of the 
+# figures as I didn't want to create too much clutter
+# The code to create them exists in "meander_vis()" in "setup/meanderFunctions.R"
+# and must just be uncommented to run
+
+# Within each figure are two panels labeled "cooc_90" and "cooc_flat"
+# cooc_flat shows the co-occurrence rates for days with MHWs against 
+# all days (~9000) in a given pixel. Generally this is around 1 - 3%
+# cooc_90 shows the rates of co-occurrence between MHW days and days when
+# the MKE is in the 90th percentile for the entire study area. These rates
+# tend to be much higher, some of them are even 1.0
+
 # A for loop for ease of creating all desired figures
 # for(i in 1:(ncol(bbox)-1)){
 #   region <- colnames(bbox)[i]
