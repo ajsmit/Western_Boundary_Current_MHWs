@@ -403,9 +403,7 @@ list_prep <- function(df){
     res <- df %>% 
       ungroup() %>% 
       select(lon, lat, month, cooc_flat, cooc_90) %>% 
-      gather(key = metric, value = val, -lon, -lat, -month) %>% 
-      mutate(lon = ifelse(lon > 180, lon-360, lon),
-             lat = ifelse(lat > 180, lat-360, lat))
+      gather(key = metric, value = val, -lon, -lat, -month)
   } else {
     res <- df %>% 
       dplyr::rename(val = mke_intensity_r) %>% 
@@ -413,27 +411,37 @@ list_prep <- function(df){
   }
   # Not working for "total"...
   res$month <- factor(res$month, levels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                            "Jul", "Aug", "sep", "Oct", "Nov", "Dec", "total"))
+                                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "total"))
   res$month[is.na(res$month)] <- "total"
+  res <- res %>% 
+    ungroup() %>% 
+    mutate(lon = ifelse(lon > 180, lon-360, lon),
+           lat = ifelse(lat > 180, lat-360, lat))
   return(res)
 }
 
 # Create a single faceted plot
-plot_res <- function(df, month_facet){
+plot_res <- function(df, month_facet, scale_label, scale_type, coords){
   fig_res <- ggplot(df, aes(x = lon, y = lat)) +
-    geom_tile(aes(fill = val), alpha = 0.7) +
+    geom_tile(aes(fill = val), na.rm = T) +
     borders(fill = "grey80", colour = "black") +
     coord_equal(xlim = c(coords[3:4]), ylim = c(coords[1:2])) +
     labs(x = NULL, y = NULL) +
     ggtitle(region) +
-    scale_fill_viridis_c("co-occurrence\nproportion") +
+    # scale_fill_viridis_c(scale_label,  option = "A", na.value = NA) +
     # facet_wrap(~metric, ncol = 1) +
     theme(legend.position = "bottom")
+  if(scale_type == "cooc"){
+    # fig_scale <- fig_res + scale_fill_viridis_c(scale_label,  option = "A", na.value = NA)
+    fig_scale <- fig_res + scale_fill_gradientn(colors = viridis::viridis(n = 9, option = "A"), limits = c(0, 1))
+  } else {
+    fig_scale <- fig_res + scale_fill_gradient2(low = "blue", high = "red")
+  }
   if(month_facet){
-    fig_res_facet <- fig_res +
+    fig_res_facet <- fig_scale +
       facet_wrap(month~metric, ncol = 6)
   } else {
-    fig_res_facet <- fig_res +
+    fig_res_facet <- fig_scale +
       facet_wrap(~metric, ncol = 1)
   }
   return(fig_res_facet)
@@ -453,16 +461,51 @@ meander_vis <- function(region){
   meander_res <- readRDS(paste0("correlate/meander_res_",region,".Rds")) 
   meander_prep <- lapply(meander_res, list_prep)
   
-  # Create the total co-occurrence figure
-  cooc_50_total <- plot_res(filter(meander_prep$cooc_50, month == "total"), F)
+  # Create the total 50th perc. MKE co-occurrence figure
+  cooc_50_total <- plot_res(filter(meander_prep$cooc_50, month == "total"), F,
+                            "co-occurrence\nproportion", "cooc", coords)
   # cooc_50_total
   ggsave(cooc_50_total, filename = paste0("figures/",region,"_cooc_50_total.pdf"), 
          width = fig_width, height = fig_height)
   
-  # Create the monthly co-occurence figure
-  cooc_50_month <- plot_res(filter(meander_50, month != "total"), T) 
+  # Create the total 90th perc. max int. co-occurrence figure
+  cooc_max_total <- plot_res(filter(meander_prep$cooc_max, month == "total"), F,
+                             "co-occurrence\nproportion", "cooc", coords)
+  # cooc_max_total
+  ggsave(cooc_max_total, filename = paste0("figures/",region,"_cooc_max_total.pdf"), 
+         width = fig_width, height = fig_height)
+  
+  # NB: There is no clear correlation pattern so I am not running the code below
+  # They will run if they are uncommented
+  # Create the total 50th perc. MKE correltaionfigure
+  # corr_50_total <- plot_res(filter(meander_prep$corr_50, month == "total"), F,
+  #                           "correlation (r)", "corr", coords)
+  # corr_50_total
+  # ggsave(corr_50_total, filename = paste0("figures/",region,"_corr_50_total.pdf"), 
+  #        width = fig_width, height = fig_height)
+  
+  # Create the total 90th perc. max int. correlation figure
+  # corr_max_total <- plot_res(filter(meander_prep$corr_max, month == "total"), F,
+  #                            "correlation (r)", "corr", coords)
+  # corr_max_total
+  # ggsave(corr_max_total, filename = paste0("figures/",region,"_corr_max_total.pdf"), 
+  #        width = fig_width, height = fig_height)
+  
+  # NB: There appears to be little in the way of any monthly trend so 
+  # I am not running the monthly figures here
+  # Simply un-comment them and they will run
+  # Create the monthly 50th perc. MKE  co-occurence figure
+  # cooc_50_month <- plot_res(filter(meander_prep$cooc_50, month != "total"), T,
+  #                           "co-occurrence\nproportion", "A")
   # cooc_50_month
-  ggsave(cooc_50_month, filename = paste0("figures/",region,"_cooc_50_month.pdf"), 
-         width = fig_width*1.5, height = fig_height*2)
+  # ggsave(cooc_50_month, filename = paste0("figures/",region,"_cooc_50_month.pdf"), 
+  #        width = fig_width*1.5, height = fig_height*2)
+  
+  # Create the monthly 50th perc. MKE  co-occurence figure
+  # cooc_max_month <- plot_res(filter(meander_prep$cooc_max, month != "total"), T,
+  #                            "co-occurrence\nproportion", "A")
+  # cooc_max_month
+  # ggsave(cooc_max_month, filename = paste0("figures/",region,"_cooc_max_month.pdf"), 
+  #        width = fig_width*1.5, height = fig_height*2)
 }
 
