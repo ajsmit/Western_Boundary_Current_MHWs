@@ -7,13 +7,13 @@ library(tidyverse)
 library(reshape2)
 library(astrochron)
 library(WaveletComp)
+library(heatwaveR)
 library(grid)
 library(doMC); doMC::registerDoMC(cores = 4)
 
 
 # Setup -------------------------------------------------------------------
 
-source("/Users/ajsmit/Dropbox/R/papers/diatom_age/functions.R")
 source("/Users/ajsmit/Dropbox/R/papers/diatom_age/custom_theme.R")
 source("/Users/ajsmit/Dropbox/R/WBCs/setup/functions.R")
 
@@ -93,7 +93,7 @@ make_ts <- function(region) {
   dat <- na.omit(dat)
 
   ts.dir <- "/Volumes/Benguela/spatial/processed/WBC/misc_results"
-  save(dat, file = paste0(ts.dir, "/", region, "-wavelet-ts.Rdata"))
+  fwrite(dat, file = paste0(ts.dir, "/", region, "-wavelet-ts.csv"), showProgress = TRUE, nThread = 6)
 
   return(dat)
 }
@@ -111,11 +111,11 @@ KC.ts <- make_ts("KC")
 # Load data and do wavelet analysis ---------------------------------------
 
 ts.dir <- "/Volumes/Benguela/spatial/processed/WBC/misc_results"
-load(file = paste0(ts.dir, "/", "AC", "-wavelet-ts.Rdata"))
-load(file = paste0(ts.dir, "/", "BC", "-wavelet-ts.Rdata"))
-load(file = paste0(ts.dir, "/", "EAC", "-wavelet-ts.Rdata"))
-load(file = paste0(ts.dir, "/", "GS", "-wavelet-ts.Rdata"))
-load(file = paste0(ts.dir, "/", "KC", "-wavelet-ts.Rdata"))
+AC.ts <- fread(file = paste0(ts.dir, "/", "AC", "-wavelet-ts.csv"))
+BC.ts <- fread(file = paste0(ts.dir, "/", "BC", "-wavelet-ts.csv"))
+EAC.ts <- fread(file = paste0(ts.dir, "/", "EAC", "-wavelet-ts.csv"))
+GS.ts <- fread(file = paste0(ts.dir, "/", "GS", "-wavelet-ts.csv"))
+KC.ts <- fread(file = paste0(ts.dir, "/", "KC", "-wavelet-ts.csv"))
 
 # check for autocorreltion using 'auto.arima()' in the 'forecast' package...
 # library(forecast)
@@ -129,19 +129,20 @@ load(file = paste0(ts.dir, "/", "KC", "-wavelet-ts.Rdata"))
 # frequencies
 
 
-# ts <- AC.ts
+# ts <- EAC.ts
+# region <- "EAC"
 
 wl_plts <- function(ts, region) {
   ts <- as.data.frame(ts)
+  ts$n <- c(1:nrow(ts))
 
   ev <- detect_event(data = ts[, c("date", "temp", "seas", "thresh")], x = date)
   ev.n <- ev$event %>%
-    dplyr::arrange(desc(duration)) %>%
+    dplyr::arrange(desc(intensity_max_relThresh)) %>%
     dplyr::select(date_start) %>%
     head(10) %>%
     c()
   tlabs <- c(ev.n$date_start)
-  ts$n <- c(1:nrow(ts))
 
   # first the exceedence data
   ts.ex <- prewhiteAR(ts[,c("n", "ex_s")], order = 3, method = "ols", aic = TRUE,
@@ -155,37 +156,99 @@ wl_plts <- function(ts, region) {
   colnames(ts.eke) <- c("seq", "eke_s")
   row.names(ts.eke) <- ts$date[4:nrow(ts)]
 
-  # using modified function to stop annoying default behaviour
-  # (see inside 'functions.R')
-  wl.ex <- analyze.wavelet(ts.ex, my.series = "ex_s", loess.span = 0, dt = 1,
-                            dj = 1/50, lowerPeriod = 6, make.pval = TRUE, n.sim = 50,
-                            method = "Fourier.rand", date.format = "%Y-%m-%d", verbose = FALSE)
-  wl.eke <- analyze.wavelet(ts.eke, "eke_s", loess.span = 0, dt = 1,
-                             dj = 1/50, lowerPeriod = 6, make.pval = TRUE, n.sim = 50,
-                             method = "Fourier.rand", date.format = "%Y-%m-%d", verbose = FALSE)
+  ts.w <- ts.ex
+  ts.w$eke_s <- ts.eke[, 2]
 
-  # plot the wavelets
-  wl.dir <- "figures"
-  pdf(file = paste0(wl.dir, "/", region, "-wavelets.pdf"), width = 12.0, height = 7.0)
-  par(mfrow = c(2, 1),
+  # coherence - whitened time series
+  wl.w <- analyze.coherency(ts.w, c("ex_s", "eke_s"),
+                             loess.span = 0,
+                             dt = 1, dj = 1/50,
+                             # window.size.t = 1, window.size.s = 1/2,
+                             lowerPeriod = 6,
+                             make.pval = TRUE, n.sim = 30,
+                             date.format = "%Y-%m-%d")
+
+
+  # wl.ex <- analyze.wavelet(ts.ex, my.series = "ex_s", loess.span = 0, dt = 1,
+  #                           dj = 1/50, lowerPeriod = 6, make.pval = TRUE, n.sim = 30,
+  #                           method = "Fourier.rand", date.format = "%Y-%m-%d", verbose = FALSE)
+  # wl.eke <- analyze.wavelet(ts.eke, "eke_s", loess.span = 0, dt = 1,
+  #                            dj = 1/50, lowerPeriod = 6, make.pval = TRUE, n.sim = 30,
+  #                            method = "Fourier.rand", date.format = "%Y-%m-%d", verbose = FALSE)
+
+  # coherence plots
+  wl.dir <- "/Users/ajsmit/Dropbox/R/WBCs/figures"
+  pdf(file = paste0(wl.dir, "/", region, "wavelets_non-whitened.pdf"), width = 6 * 1.33, height = 5.25 * 1.33,
+      pointsize = 7.5)
+  par(mfrow = c(3, 1),
       mar = c(4, 4.5, 3, 1))
+  wc.image(wl.w, main = "Cross-wavelet power spectrum, exceedence over EKE",
+           legend.params = list(lab = "Cross-wavelet power level"),
+           periodlab = "Period (days)", show.date = TRUE, graphics.reset = FALSE,
+           which.arrow.sig = "wt", color.key = "interval",
+           spec.time.axis = list(at = tlabs,
+                                 labels = c("1", "2", "3", "4", "5",
+                                            "6", "7", "8", "9", "10")),
+           timetcl = NULL, timetck = 1)
 
-  wt.image(wl.ex, my.series = "ex", siglvl = 0.05, col.contour = "black", color.key = "quantile",
+  wt.image(wl.w, my.series = "ex_s", siglvl = 0.05, col.contour = "black", color.key = "quantile",
            legend.params = list(lab = "Wavelet power level", label.digits = 2, shrink = 1.0),
            show.date = TRUE, date.format = "%Y-%m-%d",
-           timelab = "Year", periodlab = "Period", lwd = 1, graphics.reset = FALSE,
+           timelab = "Year", periodlab = "Period (days)", lwd = 1, graphics.reset = FALSE,
            main = "Exceedence",
            spec.time.axis = list(at = tlabs,
-                                 labels = c("one", "two", "three", "four", "five",
-                                            "six", "seven", "eight", "nine", "ten")),
+                                 labels = c("1", "2", "3", "4", "5",
+                                            "6", "7", "8", "9", "10")),
            timetcl = NULL, timetck = 1)
-  wt.image(wl.eke, my.series = "eke", siglvl = 0.05, col.contour = "black", color.key = "quantile",
+  wt.image(wl.w, my.series = "eke_s", siglvl = 0.05, col.contour = "black", color.key = "quantile",
            legend.params = list(lab = "Wavelet power level", label.digits = 2, shrink = 1.0),
            show.date = TRUE, date.format = "%Y-%m-%d",
-           timelab = "Year", periodlab = "Period", lwd = 1, main = "Kinetic energy",
+           timelab = "Year", periodlab = "Period (days)", lwd = 1, main = "Kinetic energy",
            spec.time.axis = list(at = tlabs,
-                                 labels = c("one", "two", "three", "four", "five",
-                                            "six", "seven", "eight", "nine", "ten")),
+                                 labels = c("1", "2", "3", "4", "5",
+                                            "6", "7", "8", "9", "10")),
+           timetcl = NULL, timetck = 1)
+  dev.off()
+
+  # coherence - non-whitened time series
+  wl.nl <- analyze.coherency(ts, c("ex_s", "eke_s"),
+                             loess.span = 0,
+                             dt = 1, dj = 1/50,
+                             # window.size.t = 1, window.size.s = 1/2,
+                             lowerPeriod = 6,
+                             make.pval = TRUE, n.sim = 30,
+                             date.format = "%Y-%m-%d")
+
+  pdf(file = paste0(wl.dir, "/", region, "-wavelets_non-whitened.pdf"), width = 6 * 1.33, height = 5.25 * 1.33,
+      pointsize = 7.5)
+  par(mfrow = c(3, 1),
+      mar = c(4, 4.5, 3, 1))
+  wc.image(wl.nl, main = "Cross-wavelet power spectrum, exceedence over EKE",
+           legend.params = list(lab = "Cross-wavelet power level"),
+           periodlab = "Period (days)", show.date = TRUE, graphics.reset = FALSE,
+           which.arrow.sig = "wt", color.key = "interval",
+           spec.time.axis = list(at = tlabs,
+                                 labels = c("1", "2", "3", "4", "5",
+                                            "6", "7", "8", "9", "10")),
+           timetcl = NULL, timetck = 1)
+
+  wt.image(wl.nl, my.series = "ex_s", siglvl = 0.05, col.contour = "black", color.key = "quantile",
+           legend.params = list(lab = "Wavelet power level", label.digits = 2, shrink = 1.0),
+           show.date = TRUE, date.format = "%Y-%m-%d",
+           timelab = "Year", periodlab = "Period (days)", lwd = 1, graphics.reset = FALSE,
+           main = "Exceedence",
+           spec.time.axis = list(at = tlabs,
+                                 labels = c("1", "2", "3", "4", "5",
+                                            "6", "7", "8", "9", "10")),
+           timetcl = NULL, timetck = 1)
+
+  wt.image(wl.nl, my.series = "eke_s", siglvl = 0.05, col.contour = "black", color.key = "quantile",
+           legend.params = list(lab = "Wavelet power level", label.digits = 2, shrink = 1.0),
+           show.date = TRUE, date.format = "%Y-%m-%d",
+           timelab = "Year", periodlab = "Period (days)", lwd = 1, main = "Kinetic energy",
+           spec.time.axis = list(at = tlabs,
+                                 labels = c("1", "2", "3", "4", "5",
+                                            "6", "7", "8", "9", "10")),
            timetcl = NULL, timetck = 1)
   dev.off()
 
