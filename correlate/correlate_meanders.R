@@ -16,6 +16,9 @@
 
 # With the data masked the co-occurences and correlations may then be run
 
+# NB: This script is intended to be run via an R terminal
+  # Therefore each different section should be (un)commented when desired
+
 
 # Functions ---------------------------------------------------------------
 
@@ -27,25 +30,20 @@ source("setup/meanderFunctions.R")
 # Set cores
 library(doMC); doMC::registerDoMC(cores = 50)
 
-# AVISO_KE_save(colnames(bbox)[1])
-# AVISO_KE_save(colnames(bbox)[2])
-# AVISO_KE_save(colnames(bbox)[3])
-# AVISO_KE_save(colnames(bbox)[4])
-# AVISO_KE_save(colnames(bbox)[5])
-
-
-# EKE percentile masks ----------------------------------------------------
-
-# Set cores
-library(doMC); doMC::registerDoMC(cores = 50)
-
 # Run sequentially
-# for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
+# for(i in 1:(ncol(bbox)-1)){
+# 
+#   # Determine region
 #   region <- colnames(bbox)[i]
 #   print(paste0("Began run on ",region," at ",Sys.time()))
-#   mke_masks(region)
+# 
+#   # Create the masks
+#   AVISO_KE_save(colnames(bbox)[i])
 #   print(paste0("Finished run on ",region," at ",Sys.time()))
-# }
+# 
+#   # Clear up some RAM
+#   gc()
+# } # ~ 13 minute each
 
 
 # Subsetting MHW results --------------------------------------------------
@@ -59,32 +57,124 @@ library(doMC); doMC::registerDoMC(cores = 50)
 #   print(paste0("Began run on ",region," at ",Sys.time()))
 #   MHW_sub_save(region)
 #   print(paste0("Finished run on ",region," at ",Sys.time()))
-# }
+#   gc()
+# } ~ 10 minutes each
+
+
+# Percentile masks --------------------------------------------------------
+
+# Set cores
+library(doMC); doMC::registerDoMC(cores = 50)
+
+# Run sequentially
+# for(i in 1:(ncol(bbox)-1)){
+# 
+#   # Determine region
+#   region <- colnames(bbox)[i]
+#   print(paste0("Began run on ",region," at ",Sys.time()))
+# 
+#   # Load the desired files
+#   AVISO_KE <- fread(paste0("../data/WBC/AVISO_KE_",region,".csv"))
+#   MHW_event <- fread(paste0("../data/WBC/MHW_event_",region,".csv"))
+#   print("Data loaded")
+# 
+#   # Create the masks
+#   masks(AVISO = AVISO_KE, MHW = MHW_event)
+#   print(paste0("Finished run on ",region," at ",Sys.time()))
+# 
+#   # Clear up some RAM
+#   rm(AVISO_KE, MHW_event); gc()
+# } # ~ 1 minute each
+
+
+# Mask regions ------------------------------------------------------------
+
+# In this step we take only the MKE and MHW pixels that are in the 
+# 50th percentile mask but not in the 90th percentile mask.
+# We also take the pixels that are in the 90th percentile max intensity mask.
+# Set cores
+library(doMC); doMC::registerDoMC(cores = 50)
+
+# Run sequentially
+# for(i in 1:(ncol(bbox)-1)){
+# 
+#   # Determine region
+#   region <- colnames(bbox)[i]
+#   print(paste0("Began run on ",region," at ",Sys.time()))
+# 
+#   # Mask the regions
+#   mask_region(region)
+#   print(paste0("Finished run on ",region," at ",Sys.time()))
+# 
+#   # Clear up some RAM
+#   gc()
+# } # ~ 8 minutes each
 
 
 # Correlate pixels --------------------------------------------------------
-# In this final step we take only the MKE and MHW pixels that are in the 
-# 75th percentile mask but not in the 90th percentile mask.
-# We then take the days the pixels in the 75th percentile areas
-# are themselves in the 90th percentile for MKE.
+
+# here we take the days the pixels in the 50th perc. MKE and 90th perc. max int.
+# areas are themselves in the 90th percentile for MKE.
 # A count of how often this occurs when MHWs are occurring is made to find
 # what the proportion of this occurence is.
 # The MKE and mean intensities on days when MKE is in the 90th perc. 
 # are then correlated.
-# This result will help to illustrate the potential relationship between
+# This result helps to illustrate the potential relationship between
 # meanders and MHWs.
 
 # Set cores
-library(doMC); doMC::registerDoMC(cores = 3)
+library(doMC); doMC::registerDoMC(cores = 50)
 
-# plyr::ldply((colnames(bbox)[-6]), .fun = meander_cor_calc, .parallel = T)
+# Calculate the results in serial
+# for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
+#   region <- colnames(bbox)[i]
+#   print(paste0("Began run on ",region," at ",Sys.time()))
+#   meander_co_calc(region)
+#   print(paste0("Finished run on ",region," at ",Sys.time()))
+#   gc()
+# } # ~30 seconds each
 
 
 # Visualise results -------------------------------------------------------
 
-meander_vis(colnames(bbox)[1])
-meander_vis(colnames(bbox)[2])
-meander_vis(colnames(bbox)[3])
-meander_vis(colnames(bbox)[4])
-meander_vis(colnames(bbox)[5])
+# Here is the naming convention for the figures produced below:
+
+# region_finalStatistic_pixelFilter_timeUnit.pdf
+
+# region: the acronym for the study region of interest
+
+# finalStatistic: The result being shown. Presently all of the figures I've uploaded
+# will say "cooc" here. 
+# This stands for co-occurrence and the figures show the rate of co-occurence 
+# of the proportion of days when MWHs are occurring in a pixel against the total
+# number of days in that pixel (0 = none, 1 = perfect) 
+
+# pixelFilter: This will say either "50" or "max"
+# 50 means that only pixels that are within the 50th to 90th percentile for 
+# mean MKE in the region are being shown
+# max means that only pixels that have had events whose max intensity is in
+# the 90th percentile for the study region are being shown
+
+# timeUnit: This shows if the figure is showing the "total" number of days
+# or if it is showing "month" facets.
+# Because there was no apparent monthly pattern I didn't save all of the 
+# figures as I didn't want to create too much clutter
+# The code to create them exists in "meander_vis()" in "setup/meanderFunctions.R"
+# and must just be uncommented to run
+
+# Within each figure are two panels labeled "cooc_90" and "cooc_flat"
+# cooc_flat shows the co-occurrence rates for days with MHWs against 
+# all days (~9000) in a given pixel. Generally this is around 1 - 3%
+# cooc_90 shows the rates of co-occurrence between MHW days and days when
+# the MKE is in the 90th percentile for the entire study area. These rates
+# tend to be much higher, some of them are even 1.0
+
+# A for loop for ease of creating all desired figures
+# for(i in 1:(ncol(bbox)-1)){
+#   region <- colnames(bbox)[i]
+#   print(paste0("Began run on ",region," at ",Sys.time()))
+#   meander_vis(region)
+#   print(paste0("Finished run on ",region," at ",Sys.time()))
+#   gc()
+# } # ~1 second each
 
