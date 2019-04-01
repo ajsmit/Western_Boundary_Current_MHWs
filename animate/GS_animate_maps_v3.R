@@ -79,20 +79,20 @@ summary(test.dat)
 combo_plot <- function(data, plot.parameters, region) {
   maskDir <- "/Users/ajsmit/Dropbox/R/WBCs/masks/"
   load(paste0(maskDir, region, "-mask_polys.RData"))
-  mke <- fortify(mask.list$mke90)
-  eke <- fortify(mask.list$eke90)
-  int <- fortify(mask.list$int90)
+  mke90 <- fortify(mask.list$mke90)
+  eke90 <- fortify(mask.list$eke90)
+  int90 <- fortify(mask.list$int90)
   top_right <- ggplot(data, aes(x = lon, y = lat)) +
     geom_raster(aes(fill = ex)) +
-    geom_polygon(data = mke90, aes(long, lat, group = group),
-                 fill = alpha("gray50", 0.5), colour = "red3", size = 0.3) +
-    geom_polygon(data = int90, aes(long, lat, group = group),
-                 fill = alpha("#c83c7e", 1.0), colour = NA) +
+    # geom_polygon(data = mke90, aes(long, lat, group = group),
+    #              fill = alpha("gray50", 0.5), colour = "red3", size = 0.3) +
+    # geom_polygon(data = int90, aes(long, lat, group = group),
+    #              fill = alpha("#c83c7e", 1.0), colour = NA) +
     # geom_polygon(data = eke75, aes(long, lat, group = group),
     #              fill = alpha("gray50", 0.5), colour = "navy", size = 0.3,
     #              linetype = "dashed") +
     geom_polygon(data = eke90, aes(long, lat, group = group),
-                 fill = alpha("gray50", 0.5), colour = "navy", size = 0.3) +
+                 fill = NA, colour = "navy", size = 0.2) +
     scale_fill_continuous_diverging(palette = "Blue-Red 3", na.value = "#011789", rev = FALSE) +
     guides(fill = guide_colourbar(title = "[°C]",
                                   frame.colour = "black",
@@ -119,15 +119,15 @@ combo_plot <- function(data, plot.parameters, region) {
 
   bottom_left <- ggplot(data, aes(x = lon, y = lat)) +
     geom_raster(aes(fill = anom)) +
-    geom_polygon(data = mke90, aes(long, lat, group = group),
-                 fill = alpha("gray50", 0.5), colour = "red3", size = 0.3) +
-    geom_polygon(data = int90, aes(long, lat, group = group),
-                 fill = alpha("#c83c7e", 1.0), colour = NA) +
+    # geom_polygon(data = mke90, aes(long, lat, group = group),
+    #              fill = alpha("gray50", 0.5), colour = "red3", size = 0.3) +
+    # geom_polygon(data = int90, aes(long, lat, group = group),
+    #              fill = alpha("#c83c7e", 1.0), colour = NA) +
     # geom_polygon(data = eke75, aes(long, lat, group = group),
     #              fill = alpha("gray50", 0.5), colour = "navy", size = 0.3,
     #              linetype = "dashed") +
     geom_polygon(data = eke90, aes(long, lat, group = group),
-                 fill = alpha("gray50", 0.5), colour = "navy", size = 0.3) +
+                 fill = NA, colour = "navy", size = 0.2) +
     scale_fill_continuous_diverging(palette = "Blue-Red 3", na.value = "#011789", rev = FALSE,
                                     limits = c(-12.5, 12.5)) +
     guides(fill = guide_colourbar(title = "[°C]",
@@ -145,15 +145,15 @@ combo_plot <- function(data, plot.parameters, region) {
 
   bottom_right <- ggplot(data, aes(x = lon, y = lat)) +
     geom_raster(aes(fill = cum)) +
-    geom_polygon(data = mke90, aes(long, lat, group = group),
-                 fill = alpha("gray50", 0.5), colour = "red3", size = 0.3) +
-    geom_polygon(data = int90, aes(long, lat, group = group),
-                 fill = alpha("#c83c7e", 1.0), colour = NA) +
+    # geom_polygon(data = mke90, aes(long, lat, group = group),
+    #              fill = alpha("gray50", 0.5), colour = "red3", size = 0.3) +
+    # geom_polygon(data = int90, aes(long, lat, group = group),
+    #              fill = alpha("#c83c7e", 1.0), colour = NA) +
     # geom_polygon(data = eke75, aes(long, lat, group = group),
     #              fill = alpha("gray50", 0.5), colour = "navy", size = 0.3,
     #              linetype = "dashed") +
     geom_polygon(data = eke90, aes(long, lat, group = group),
-                 fill = alpha("gray50", 0.5), colour = "navy", size = 0.3) +
+                 fill = NA, colour = "navy", size = 0.2) +
     scale_fill_continuous_sequential(palette = "Purples 3", na.value = "#011789", rev = TRUE,
                                     limits = c(0, 886)) +
     guides(fill = "none") +

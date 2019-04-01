@@ -1,8 +1,6 @@
 library(data.table)
 library(tidyverse)
-library(ggplot2)
 library(colorspace)
-library(RColorBrewer)
 library(ggpubr)
 
 
@@ -38,17 +36,17 @@ gv.plot <- function(data, plot.parameters, bathy, region) {
   fig <- ggplot(data, aes(x = lon, y = lat)) +
     geom_raster(aes(fill = DT_model)) +
     scale_fill_continuous_diverging(palette = "Blue-Red 3", rev = FALSE, n_interp = 11) +
-    # stat_contour(data = bathy, aes(x = lon, y = lat, z = z),
-    #              col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
+    stat_contour(data = bathy, aes(x = lon, y = lat, z = z),
+                 col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
     geom_contour(aes(x = lon, y = lat, z = p_trend),
                  binwidth = 0.05, breaks = c(0.05),
                  colour = "white", size = 0.2) +
     geom_polygon(data = int, aes(long, lat, group = group),
                  fill = NA, colour = "purple", size = 0.3) +
-    # geom_polygon(data = mke, aes(long, lat, group = group),
-    #              fill = NA, colour = "red3", size = 0.3) +
-    # geom_polygon(data = eke, aes(long, lat, group = group),
-    #              fill = NA, colour = "navy", size = 0.3) +
+    geom_polygon(data = mke, aes(long, lat, group = group),
+                 fill = NA, colour = "red3", size = 0.3) +
+    geom_polygon(data = eke, aes(long, lat, group = group),
+                 fill = NA, colour = "navy", size = 0.3) +
     guides(alpha = "none",
            size = "none",
            fill = guide_colourbar(title = "(°C/dec)",
