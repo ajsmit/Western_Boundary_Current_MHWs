@@ -230,27 +230,27 @@ masks <- function(AVISO, MHW){
 eddy_masks <- function(bbox){
   
   # Load eddy data
-  nc <- nc_open("correlate/tracks_AVISO_DT2014_daily_web.nc")
-  eddies <- tibble(lat = round(ncvar_get(nc, varid = "lat"), 4), # observation longitude
-                   lon = round(ncvar_get(nc, varid = "lon"), 4), # observation latitude
+  nc <- nc_open("correlate/eddy_trajectory_2.0exp_19930101_20180118.nc")
+  eddies <- tibble(lat = round(ncvar_get(nc, varid = "latitude"), 4), # observation longitude
+                   lon = round(ncvar_get(nc, varid = "longitude"), 4), # observation latitude
                    # days since 1950-01-01 00:00:00 UTC:
-                   time = as.Date(ncvar_get(nc, varid = "j1"), origin = "1950-01-01"),
+                   time = as.Date(ncvar_get(nc, varid = "time"), origin = "1950-01-01"),
                    # magnitude of the height difference between (Obs) cm the extremum
                    # of SLA within the eddy andthe SLA around the contour defining the
                    # eddy perimeter:
-                   amplitude = round(ncvar_get(nc, varid = "A"), 3),
+                   amplitude = round(ncvar_get(nc, varid = "amplitude"), 3),
                    # flow orientation of eddies -1 is Cyclonic and 1 is Anticyclonic:
-                   cyclonic_type = ncvar_get(nc, varid = "cyc"),
+                   cyclonic_type = ncvar_get(nc, varid = "cyclonic_type"),
                    # observation sequence number, days from eddy start:
-                   observation_number = ncvar_get(nc, varid = "n"),
+                   observation_number = ncvar_get(nc, varid = "observation_number"),
                    # flag indicating if the value is interpolated between two observations
                    # or not (0: observed, 1: interpolated):
-                   # observed_flag = ncvar_get(nc, varid = "observed_flag"),
+                   observed_flag = ncvar_get(nc, varid = "observed_flag"),
                    # average speed of the contour defining the radius scale L:
-                   speed_average = ncvar_get(nc, varid = "U"),
+                   speed_average = ncvar_get(nc, varid = "speed_average"),
                    # radius of a circle whose area is equal to that enclosed by the
                    # contour of maximum circum-average speed:
-                   speed_radius = ncvar_get(nc, varid = "L"),
+                   speed_radius = ncvar_get(nc, varid = "speed_radius"),
                    # eddy identification number:
                    track = ncvar_get(nc, varid = "track"))
   nc_close(nc); rm(nc)
@@ -269,17 +269,18 @@ eddy_masks <- function(bbox){
   test <- eddies %>% 
     group_by(track, lat, lon, time) %>% 
     nest() %>% 
-    slice(1:10) %>% 
-    mutate(north_lon = map(data, geosphere::destPoint, p = c(lon_cor_2, lat), 
-                           b = 0, d = speed_radius*1000)) %>% 
-    unnest()
+    slice(1:10) #%>% 
+    
+    # mutate(north_lon = map(data, geosphere::destPoint, p = c(lon_cor_2, lat), 
+    #                        b = 0, d = speed_radius*1000)) %>% 
+    # unnest()
   
-  northing <- as.numeric(geosphere::destPoint(p = cbind(eddies$lon_cor_2, eddies$lat), 
-                                              b = 0, d = eddies$speed_radius*1000))
-  eddies$north_lon <- as.numeric(geosphere::destPoint(p = cbind(eddies$lon_cor_2, eddies$lat), 
-                                                      b = 0, d = eddies$speed_radius*1000))[1]
-  eddies$north_lon <- as.numeric(geosphere::destPoint(p = cbind(eddies$lon_cor_2, eddies$lat), 
-                                                      b = 0, d = eddies$speed_radius*1000))[1]
+  # northing <- as.numeric(geosphere::destPoint(p = cbind(eddies$lon_cor_2, eddies$lat), 
+  #                                             b = 0, d = eddies$speed_radius*1000))
+  # eddies$north_lon <- as.numeric(geosphere::destPoint(p = cbind(eddies$lon_cor_2, eddies$lat), 
+  #                                                     b = 0, d = eddies$speed_radius*1000))[1]
+  # eddies$north_lon <- as.numeric(geosphere::destPoint(p = cbind(eddies$lon_cor_2, eddies$lat), 
+  #                                                     b = 0, d = eddies$speed_radius*1000))[1]
 }
 
 
