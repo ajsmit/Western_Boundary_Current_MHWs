@@ -10,11 +10,15 @@
 
 # With these databases recreated here, the next step is to re-calculate KE
 
+# Then the eddy trajectory product from AVISO is used to create an eddy mask
+
 # With all of the results ready, the next step is to use the 90th perc.
-# MKE mask and the 75th perc. MKE mask to define the region within which 
+# MKE mask and the 50th perc. MKE mask to define the region within which 
 # we want to compare MKE and MHW intensity
 
-# With the data masked the co-occurences and correlations may then be run
+# We then mask these results with the eddy trajectory mask
+
+# With the data masked in two progressive steps the co-occurences and correlations may then be run
 
 # NB: This script is intended to be run via an R terminal
   # Therefore each different section should be (un)commented when desired
@@ -87,6 +91,10 @@ library(doMC); doMC::registerDoMC(cores = 50)
 # } # ~ 1 minute each
 
 
+# Eddy masks --------------------------------------------------------------
+
+
+
 # Mask regions ------------------------------------------------------------
 
 # In this step we take only the MKE and MHW pixels that are in the 
@@ -103,6 +111,7 @@ library(doMC); doMC::registerDoMC(cores = 50)
 #   print(paste0("Began run on ",region," at ",Sys.time()))
 # 
 #   # Mask the regions
+#      # NB: This runs the MKE and Eddy masks
 #   mask_region(region)
 #   print(paste0("Finished run on ",region," at ",Sys.time()))
 # 
@@ -113,7 +122,7 @@ library(doMC); doMC::registerDoMC(cores = 50)
 
 # Correlate pixels --------------------------------------------------------
 
-# here we take the days the pixels in the 50th perc. MKE and 90th perc. max int.
+# Here we take the days the pixels in the 50th perc. MKE and 90th perc. max int.
 # areas are themselves in the 90th percentile for MKE.
 # A count of how often this occurs when MHWs are occurring is made to find
 # what the proportion of this occurence is.
