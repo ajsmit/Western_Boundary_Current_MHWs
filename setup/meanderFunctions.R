@@ -225,9 +225,82 @@ masks <- function(AVISO, MHW){
 
 # Create eddy trajectory masks --------------------------------------------
 
+# Wrapper function to load a day of AVISO data to get the active grid
+# cells inside each boounding box
+bbox_cells <- function(region){
+  AVISO_sub_load(AVISO_files[1],
+                 coords = bbox[colnames(bbox) == region][1:4,]) %>% 
+    filter(t == "1993-01-01") %>% 
+    select(lon, lat) %>% 
+    # Create pixel sides
+    mutate(bottom = lat-0.125,
+           top = lat+0.125,
+           left = lon-0.125,
+           right = lon+0.125)
+}
+
+# Function that looks at the distance between two points and decides if
+# they fall within the radius of the eddy on that day
+# testers...
+# df <- slice(eddies_sub, 1) %>%
+  # unnest() %>% 
+  # select(-lon, -lat2, -time)
+dist_calc <- function(df, cells){
+  cells_sub <- cells %>% 
+    # mutate(lon_cor_2 = df$lon_cor_2,
+    #        lat_2 = df$lat,
+    #        index = 1:nrow(.)) %>% 
+    # group_by(index) %>% 
+    # nest() %>% 
+    # filter()
+    mutate(bottom_left = geosphere::distGeo(cbind(cells$left, cells$bottom), c(df$lon_cor_2, df$lat))/1000,
+           bottom_right = geosphere::distGeo(cbind(cells$right, cells$bottom), c(df$lon_cor_2, df$lat))/1000,
+           top_left = geosphere::distGeo(cbind(cells$left, cells$top), c(df$lon_cor_2, df$lat))/1000,
+           top_right = geosphere::distGeo(cbind(cells$right, cells$top), c(df$lon_cor_2, df$lat))/1000,
+           centre = geosphere::distGeo(cbind(cells$lon, cells$lat), c(df$lon_cor_2, df$lat))/1000)
+  # geosphere::distGeo(c(df$lon_cor_2, df$lat), c(cells$left[1], cells$bottom[1]))/1000
+  # geosphere::distGeo(cbind(cells$left, cells$bottom), c(df$lon_cor_2, df$lat))/1000
+}
+
+# This function creates the daily index of pixels with eddies in them
+# testers...
+# cells <- cells_EAC
+eddy_cells <- function(cells){
+  # The +-4 is to allow for a larger bbox due to the size of the largest eddy
+  # We still want the extent of the large eddies to be considered even when
+  # the centre of the eddy is no longer within the bounding box
+  eddies_sub <- eddies %>% 
+    filter(lon_cor_2 <= max(cells$right)+4,
+           lon_cor_2 >= min(cells$left)-4,
+           lat <= max(cells$top)+4,
+           lat >= min(cells$bottom)-4) %>% 
+    mutate(lat2 = lat) %>% 
+    group_by(lon, lat2, time) %>% 
+    nest() %>% 
+    mutate(cell_dists = map(data, dist_calc, cells = cells))
+  
+  
+}
+
+
+
+# Function for creating the eddy masks
+# This looks at when any grid cell in a bounding box has any corner
+# within the radius from the centre point of the eddy on a given day
+# This function itself does not mask the AVISO data
+# That is done in xxxx()
 # testers...
 # region <- "AC"
-eddy_masks <- function(bbox){
+eddy_masks <- function(){
+  
+  
+  # Create the bbox active pixel layers
+  cells_AC <- bbox_cells("AC")
+  cells_BC <- bbox_cells("BC")
+  cells_EAC <- bbox_cells("EAC")
+  cells_GS <- bbox_cells("GS")
+  cells_KC <- bbox_cells("KC")
+  
   
   # Load eddy data
   nc <- nc_open("correlate/eddy_trajectory_2.0exp_19930101_20180118.nc")
@@ -254,6 +327,7 @@ eddy_masks <- function(bbox){
                    # eddy identification number:
                    track = ncvar_get(nc, varid = "track"))
   nc_close(nc); rm(nc)
+  
   
   # correct lon 
   eddies <- eddies %>% 
