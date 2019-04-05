@@ -4,14 +4,14 @@
 # Load libraries ----------------------------------------------------------
 
 library(tidyverse)
-library(furrr)
+# library(furrr)
 # library(multidplyr, lib.loc = "../R-packages/")
 library(ncdf4)
 library(RcppRoll)
 library(data.table)
 doMC::registerDoMC(cores = 50)
 # tikoraluk_cluster <- multidplyr::create_cluster(50)
-future::plan(multiprocess)
+# future::plan(multiprocess)
 
 
 # Files -------------------------------------------------------------------
@@ -234,7 +234,7 @@ masks <- function(AVISO, MHW){
 bbox_cells <- function(region){
   AVISO_sub_load(AVISO_files[1],
                  coords = bbox[colnames(bbox) == region][1:4,]) %>% 
-    filter(t == "1993-01-01") %>% 
+    filter(t == "2000-01-01") %>% 
     select(lon, lat) %>% 
     # Create pixel sides
     mutate(bottom = lat-0.125,
@@ -247,44 +247,63 @@ bbox_cells <- function(region){
 # they fall within the radius of the eddy on that day
 # testers...
 # df <- slice(eddies_sub, 1) %>%
-# unnest() %>%
-# select(-lon2, -lat2, -time2)
+# # unnest() %>%
+# select(-lon2, -lat2, -time)
+# df <- test %>%
+# select(-lon2, -lat2, -time)
 dist_calc <- function(df, cells){
+  if(nrow(df) != 1) stop("df shuold be one row exactly")
   # Create a rough, very conservative, radius value for further filtering of pixels
   # before calculating distance of eddies from nearby pixels
   rough_radius <- ceiling(df$speed_radius/50)
   
-  # Filter pixles by rough radius and find the distances from pixels to eddy centre
+  # Filter pixles by rough radius
   cells_sub <- cells %>% 
     filter(lon <= df$lon+rough_radius, 
            lon >= df$lon-rough_radius,
            lat <= df$lat+rough_radius,
-           lat >= df$lat-rough_radius) %>% 
-    mutate(bottom_left =round(geosphere::distGeo(cbind(.$left, .$bottom), c(df$lon, df$lat))/1000),
-           bottom_right = round(geosphere::distGeo(cbind(.$right, .$bottom), c(df$lon, df$lat))/1000),
-           top_left = round(geosphere::distGeo(cbind(.$left, .$top), c(df$lon, df$lat))/1000),
-           top_right = round(geosphere::distGeo(cbind(.$right, .$top), c(df$lon, df$lat))/1000),
-           centre = round(geosphere::distGeo(cbind(.$lon, .$lat), c(df$lon, df$lat))/1000))
+           lat >= df$lat-rough_radius)
   
-  # Filter out only pixels with some part covered by the eddy
-  cells_res <- cells_sub %>% 
-    filter(bottom_left <= df$speed_radius |
-             bottom_right <= df$speed_radius |
-             top_left <= df$speed_radius |
-             top_right <= df$speed_radius |
-             centre <= df$speed_radius) %>% 
-    select(lon, lat) %>% 
-    dplyr::rename(lon_mask = lon, lat_mask = lat)
+  if(nrow(cells_sub) > 0){
+    # If there are pixels to mask, find their distances from the eddy centre
+    cells_dist <- cells_sub %>% 
+      mutate(bottom_left = round(geosphere::distGeo(cbind(.$left, .$bottom), c(df$lon, df$lat))/1000),
+             bottom_right = round(geosphere::distGeo(cbind(.$right, .$bottom), c(df$lon, df$lat))/1000),
+             top_left = round(geosphere::distGeo(cbind(.$left, .$top), c(df$lon, df$lat))/1000),
+             top_right = round(geosphere::distGeo(cbind(.$right, .$top), c(df$lon, df$lat))/1000),
+             centre = round(geosphere::distGeo(cbind(.$lon, .$lat), c(df$lon, df$lat))/1000))
+    
+    # Filter out only pixels with some part covered by the eddy
+    cells_filter <- cells_dist %>% 
+      filter(bottom_left <= df$speed_radius |
+               bottom_right <= df$speed_radius |
+               top_left <= df$speed_radius |
+               top_right <= df$speed_radius |
+               centre <= df$speed_radius) %>% 
+      select(lon, lat) %>% 
+      dplyr::rename(lon_mask = lon, lat_mask = lat)
+
+    # Combine and exit
+    cells_res <- cbind(df, cells_filter)
+    return(cells_res)
+    
+  } else {
+    # cells_filter <- data.frame(lon_mask = NA, lat_mask = NA)
+  }
   
   # Combine and exit
-  cells_res <- cbind(df, cells_res)
-  return(cells_res)
+  # cells_res <- cbind(df, cells_filter)
+  # return(cells_res)
+  return()
 }
 
 # This function creates the daily index of pixels with eddies in them
 # testers...
-# cells <- cells_EAC
-eddy_cells <- function(eddies, cells){
+# region <- "EAC"
+eddy_cells <- function(eddies = eddies, region){
+  
+  cells <- bbox_cells(region)
+  
   # The +-4 is to allow for a larger bbox due to the size of the largest eddy
   # We still want the extent of the larger eddies to be considered even when
   # the centre of the eddy is no longer within the bounding box
@@ -294,41 +313,27 @@ eddy_cells <- function(eddies, cells){
            lat <= max(cells$top)+4,
            lat >= min(cells$bottom)-4) %>% 
     mutate(lon2 = lon,
-           lat2 = lat,
-           time2 = time)
+           lat2 = lat)
+  
+  # test <- eddies_sub[235,]
   
   # Find the pixels masks by each eddy on each day of the dataset
-  # system.time(
-  #   eddies_res <- eddies_sub %>%
-  #     group_by(lon2, lat2, time2) %>%
-  #     nest() %>% 
-  #     mutate(cell_dists = future_map(data, dist_calc, cells = cells)) %>%
-  #     # collect() %>%
-  #     select(cell_dists) %>%
-  #     unnest()
-  # )
-  eddies_res <- plyr::ddply(eddies_sub, .variables = c("lon2", "lat2", "time2"),
-                            .fun = dist_calc, cells = cells, .parallel = TRUE)
-  return(eddies_res)
+  doMC::registerDoMC(cores = 50)
+  system.time(
+  eddies_res <- plyr::ddply(eddies_sub[1:134,], .variables = c("lon2", "lat2", "time"),
+                            # .fun = mean, x = "speed_radius", .parallel = T)
+                            .fun = dist_calc, cells = cells, .parallel = TRUE) %>%
+    select(-lon2, -lat2, -time)
+  ) # ~ xxx seconds for EAC
+  fwrite(eddies_res, file = paste0("../data/WBC/AVISO_eddy_mask_",region,".csv"), nThread = 10)
+  # return(eddies_res)
 }
 
 # Function for creating the eddy masks
-# This looks at when any grid cell in a bounding box has any corner
-# within the radius from the centre point of the eddy on a given day
-# This function itself does not mask the AVISO data
-# That is done in xxxx()
+# This loads the eddy data but then calls eddy_cells() to do the heavy lifting
 # testers...
 # region <- "AC"
 eddy_masks <- function(){
-  
-  
-  # Create the bbox active pixel layers
-  cells_AC <- bbox_cells("AC")
-  cells_BC <- bbox_cells("BC")
-  cells_EAC <- bbox_cells("EAC")
-  cells_GS <- bbox_cells("GS")
-  cells_KC <- bbox_cells("KC")
-  
   
   # Load eddy data
   nc <- nc_open("correlate/eddy_trajectory_2.0exp_19930101_20180118.nc")
@@ -356,7 +361,6 @@ eddy_masks <- function(){
                    track = ncvar_get(nc, varid = "track"))
   nc_close(nc); rm(nc)
   
-  
   # correct lon 
   # NB: Needs to be corrected twice due to the way the tracks were assembled
   eddies <- eddies %>% 
@@ -367,12 +371,16 @@ eddy_masks <- function(){
     select(-lon_cor)
   # max(eddies$lon)
   # max(eddies$lon, na.rm = T)
-  # max(eddies$lon_cor_1, na.rm = T)
-  # max(eddies$lon_cor_2, na.rm = T)
   
+  # Calculate the eddy masks for each bbox and save
+  eddy_cells("AC")
+  eddy_cells("BC")
+  eddy_cells("EAC")
+  eddy_cells("GS")
+  eddy_cells("KC")
   
-  # Caluclate the eddy masks for each bbox
-  eddy_cells_EAC <- eddy_cells(eddies, cells_EAC)
+  # Clean up and exit
+  rm(eddies); gc()
 }
 
 

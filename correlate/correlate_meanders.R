@@ -32,7 +32,7 @@ source("setup/meanderFunctions.R")
 # Subet AVISO and calculate KE --------------------------------------------
 
 # Set cores
-library(doMC); doMC::registerDoMC(cores = 50)
+doMC::registerDoMC(cores = 50)
 
 # Run sequentially
 # for(i in 1:(ncol(bbox)-1)){
@@ -53,7 +53,7 @@ library(doMC); doMC::registerDoMC(cores = 50)
 # Subsetting MHW results --------------------------------------------------
 
 # Set cores
-library(doMC); doMC::registerDoMC(cores = 50)
+doMC::registerDoMC(cores = 50)
 
 # Subset MHW data
 # for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
@@ -68,7 +68,7 @@ library(doMC); doMC::registerDoMC(cores = 50)
 # Percentile masks --------------------------------------------------------
 
 # Set cores
-library(doMC); doMC::registerDoMC(cores = 50)
+doMC::registerDoMC(cores = 50)
 
 # Run sequentially
 # for(i in 1:(ncol(bbox)-1)){
@@ -93,6 +93,11 @@ library(doMC); doMC::registerDoMC(cores = 50)
 
 # Eddy masks --------------------------------------------------------------
 
+# In this step we run a function that looks at the AVISO eddy track database
+# and finds which pixels in each bbox are within the radius and centre point
+# of all of the recorded eddies from 1993-01-01 to 2019-
+doMC::registerDoMC(cores = 50)
+eddy_masks()
 
 
 # Mask regions ------------------------------------------------------------
@@ -101,7 +106,7 @@ library(doMC); doMC::registerDoMC(cores = 50)
 # 50th percentile mask but not in the 90th percentile mask.
 # We also take the pixels that are in the 90th percentile max intensity mask.
 # Set cores
-library(doMC); doMC::registerDoMC(cores = 50)
+doMC::registerDoMC(cores = 50)
 
 # Run sequentially
 # for(i in 1:(ncol(bbox)-1)){
@@ -132,7 +137,7 @@ library(doMC); doMC::registerDoMC(cores = 50)
 # meanders and MHWs.
 
 # Set cores
-library(doMC); doMC::registerDoMC(cores = 50)
+doMC::registerDoMC(cores = 50)
 
 # Calculate the results in serial
 # for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
