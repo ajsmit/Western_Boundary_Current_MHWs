@@ -4,10 +4,14 @@
 # Load libraries ----------------------------------------------------------
 
 library(tidyverse)
+library(furrr)
+# library(multidplyr, lib.loc = "../R-packages/")
 library(ncdf4)
 library(RcppRoll)
 library(data.table)
-library(doMC); doMC::registerDoMC(cores = 50)
+doMC::registerDoMC(cores = 50)
+# tikoraluk_cluster <- multidplyr::create_cluster(50)
+future::plan(multiprocess)
 
 
 # Files -------------------------------------------------------------------
@@ -226,7 +230,7 @@ masks <- function(AVISO, MHW){
 # Create eddy trajectory masks --------------------------------------------
 
 # Wrapper function to load a day of AVISO data to get the active grid
-# cells inside each boounding box
+# cells inside each bounding box
 bbox_cells <- function(region){
   AVISO_sub_load(AVISO_files[1],
                  coords = bbox[colnames(bbox) == region][1:4,]) %>% 
@@ -243,46 +247,70 @@ bbox_cells <- function(region){
 # they fall within the radius of the eddy on that day
 # testers...
 # df <- slice(eddies_sub, 1) %>%
-  # unnest() %>% 
-  # select(-lon, -lat2, -time)
+# unnest() %>%
+# select(-lon2, -lat2, -time2)
 dist_calc <- function(df, cells){
+  # Create a rough, very conservative, radius value for further filtering of pixels
+  # before calculating distance of eddies from nearby pixels
+  rough_radius <- ceiling(df$speed_radius/50)
+  
+  # Filter pixles by rough radius and find the distances from pixels to eddy centre
   cells_sub <- cells %>% 
-    # mutate(lon_cor_2 = df$lon_cor_2,
-    #        lat_2 = df$lat,
-    #        index = 1:nrow(.)) %>% 
-    # group_by(index) %>% 
-    # nest() %>% 
-    # filter()
-    mutate(bottom_left = geosphere::distGeo(cbind(cells$left, cells$bottom), c(df$lon_cor_2, df$lat))/1000,
-           bottom_right = geosphere::distGeo(cbind(cells$right, cells$bottom), c(df$lon_cor_2, df$lat))/1000,
-           top_left = geosphere::distGeo(cbind(cells$left, cells$top), c(df$lon_cor_2, df$lat))/1000,
-           top_right = geosphere::distGeo(cbind(cells$right, cells$top), c(df$lon_cor_2, df$lat))/1000,
-           centre = geosphere::distGeo(cbind(cells$lon, cells$lat), c(df$lon_cor_2, df$lat))/1000)
-  # geosphere::distGeo(c(df$lon_cor_2, df$lat), c(cells$left[1], cells$bottom[1]))/1000
-  # geosphere::distGeo(cbind(cells$left, cells$bottom), c(df$lon_cor_2, df$lat))/1000
+    filter(lon <= df$lon+rough_radius, 
+           lon >= df$lon-rough_radius,
+           lat <= df$lat+rough_radius,
+           lat >= df$lat-rough_radius) %>% 
+    mutate(bottom_left =round(geosphere::distGeo(cbind(.$left, .$bottom), c(df$lon, df$lat))/1000),
+           bottom_right = round(geosphere::distGeo(cbind(.$right, .$bottom), c(df$lon, df$lat))/1000),
+           top_left = round(geosphere::distGeo(cbind(.$left, .$top), c(df$lon, df$lat))/1000),
+           top_right = round(geosphere::distGeo(cbind(.$right, .$top), c(df$lon, df$lat))/1000),
+           centre = round(geosphere::distGeo(cbind(.$lon, .$lat), c(df$lon, df$lat))/1000))
+  
+  # Filter out only pixels with some part covered by the eddy
+  cells_res <- cells_sub %>% 
+    filter(bottom_left <= df$speed_radius |
+             bottom_right <= df$speed_radius |
+             top_left <= df$speed_radius |
+             top_right <= df$speed_radius |
+             centre <= df$speed_radius) %>% 
+    select(lon, lat) %>% 
+    dplyr::rename(lon_mask = lon, lat_mask = lat)
+  
+  # Combine and exit
+  cells_res <- cbind(df, cells_res)
+  return(cells_res)
 }
 
 # This function creates the daily index of pixels with eddies in them
 # testers...
 # cells <- cells_EAC
-eddy_cells <- function(cells){
+eddy_cells <- function(eddies, cells){
   # The +-4 is to allow for a larger bbox due to the size of the largest eddy
-  # We still want the extent of the large eddies to be considered even when
+  # We still want the extent of the larger eddies to be considered even when
   # the centre of the eddy is no longer within the bounding box
   eddies_sub <- eddies %>% 
-    filter(lon_cor_2 <= max(cells$right)+4,
-           lon_cor_2 >= min(cells$left)-4,
+    filter(lon <= max(cells$right)+4,
+           lon >= min(cells$left)-4,
            lat <= max(cells$top)+4,
            lat >= min(cells$bottom)-4) %>% 
-    mutate(lat2 = lat) %>% 
-    group_by(lon, lat2, time) %>% 
-    nest() %>% 
-    mutate(cell_dists = map(data, dist_calc, cells = cells))
+    mutate(lon2 = lon,
+           lat2 = lat,
+           time2 = time)
   
-  
+  # Find the pixels masks by each eddy on each day of the dataset
+  # system.time(
+  #   eddies_res <- eddies_sub %>%
+  #     group_by(lon2, lat2, time2) %>%
+  #     nest() %>% 
+  #     mutate(cell_dists = future_map(data, dist_calc, cells = cells)) %>%
+  #     # collect() %>%
+  #     select(cell_dists) %>%
+  #     unnest()
+  # )
+  eddies_res <- plyr::ddply(eddies_sub, .variables = c("lon2", "lat2", "time2"),
+                            .fun = dist_calc, cells = cells, .parallel = TRUE)
+  return(eddies_res)
 }
-
-
 
 # Function for creating the eddy masks
 # This looks at when any grid cell in a bounding box has any corner
@@ -330,31 +358,21 @@ eddy_masks <- function(){
   
   
   # correct lon 
+  # NB: Needs to be corrected twice due to the way the tracks were assembled
   eddies <- eddies %>% 
-    mutate(lon_cor_1 = case_when(lon > 180 ~ lon-360,
-                                 lon < 180 ~ lon),
-           lon_cor_2 = case_when(lon_cor_1 > 180 ~ lon_cor_1-360,
-                                 lon_cor_1 < 180 ~ lon_cor_1))
+    mutate(lon_cor = case_when(lon > 180 ~ lon-360,
+                               lon <= 180 ~ lon),
+           lon = case_when(lon_cor > 180 ~ lon_cor-360,
+                           lon_cor <= 180 ~ lon_cor)) %>% 
+    select(-lon_cor)
+  # max(eddies$lon)
   # max(eddies$lon, na.rm = T)
   # max(eddies$lon_cor_1, na.rm = T)
   # max(eddies$lon_cor_2, na.rm = T)
   
-  # Use purr multicoring here
-  test <- eddies %>% 
-    group_by(track, lat, lon, time) %>% 
-    nest() %>% 
-    slice(1:10) #%>% 
-    
-    # mutate(north_lon = map(data, geosphere::destPoint, p = c(lon_cor_2, lat), 
-    #                        b = 0, d = speed_radius*1000)) %>% 
-    # unnest()
   
-  # northing <- as.numeric(geosphere::destPoint(p = cbind(eddies$lon_cor_2, eddies$lat), 
-  #                                             b = 0, d = eddies$speed_radius*1000))
-  # eddies$north_lon <- as.numeric(geosphere::destPoint(p = cbind(eddies$lon_cor_2, eddies$lat), 
-  #                                                     b = 0, d = eddies$speed_radius*1000))[1]
-  # eddies$north_lon <- as.numeric(geosphere::destPoint(p = cbind(eddies$lon_cor_2, eddies$lat), 
-  #                                                     b = 0, d = eddies$speed_radius*1000))[1]
+  # Caluclate the eddy masks for each bbox
+  eddy_cells_EAC <- eddy_cells(eddies, cells_EAC)
 }
 
 
