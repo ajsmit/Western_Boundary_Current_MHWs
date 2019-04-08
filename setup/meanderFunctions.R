@@ -492,19 +492,69 @@ mask_region <- function(region){
 # region <- "EAC"
 
 # Wrapper function for screening out pixels within an eddy masks
-screen_eddy <- function(df, ){
+# This function is designed to be fed a dataframe already group by date with plyr::ddply
+# df <- AVISO_MHW_50 %>%
+  # filter(t == "1995-01-01")
+# eddy_mask <- eddy_masks_region
+# mke_val <- mke_masks_region$mke_90$mke_90[1]
+screen_eddy <- function(df, eddy_mask, mke_val){
+  
+  # Add mask column
+  df <- df %>% 
+    unite(lon, lat, col = "lonlat", sep = "", remove = F)
+  
+  # Filter only the one date used for the calculation
+  eddy_mask_sub <- filter(eddy_mask, time == as.character(df$t[1])) %>% 
+    unite(lon_mask, lat_mask, col = "lonlat", sep = "", remove = F) %>% 
+    dplyr::rename(lon_eddy = lon, lat_eddy = lat)
+  
+  # Filter out pixels with eddy coverage
+  pixels_eddy <- df %>% 
+    filter(mask %in% eddy_mask_sub$mask) %>% 
+    left_join(eddy_mask_sub, by = "lonlat")
+  # Filter out pixels without eddy coverage
+  pixels_no_eddy <- df %>% 
+    filter(!mask %in% eddy_mask_sub$mask) %>% 
+    left_join(eddy_mask_sub, by = "lonlat")
+  
+  ggplot(df, aes(x = lon, y = lat, fill = eke)) +
+    geom_raster()
+  
+  ggplot(eddy_mask_sub, aes(x = lon_mask, y = lat_mask, fill = speed_radius)) +
+    geom_raster()
+  
+  ggplot(pixels_eddy, aes(x = lon, y = lat, fill = eke)) +
+    geom_raster()
+  
+  ggplot(pixels_no_eddy, aes(x = lon, y = lat, fill = eke)) +
+    geom_raster()
   
 }
 
 # Wrapper function for screening out days below the 90th MKE
 screen_mke <- function(df, mke_val){
-  res <- df %>% 
+  # Count base days and the occurrence of MHWs
+  res_base <- df %>% 
     group_by(lon, lat) %>%
-    mutate(mke_days = n()) %>%
+    mutate(mke_base_days = n()) %>%
+    filter(event == TRUE) %>%
+    # filter(mke >= mke_val) %>%
+    mutate(MHW_base_days = n()) #%>% 
+    # mutate(MHW_days = n())
+  
+  # Screen out days below 90th perc. MKE and count days with MHWs
+  res_90 <- df %>% 
+    group_by(lon, lat) %>%
+    # mutate(mke_days = n()) %>%
     filter(mke >= mke_val) %>%
     mutate(mke_90_days = n()) %>% 
     filter(event == TRUE) %>%
-    mutate(MHW_days = n())
+    mutate(MHW_90_days = n())
+  
+  # Combine and exit
+  res <- left_join(res_base, res_90, 
+                   by = c("lon", "lat", "t", "mke", "eke", "coord_index",
+                          "temp", "seas", "thresh", "event", "event_no", "intensity"))
   return(res)
 }
 
@@ -514,16 +564,18 @@ cooc_90 <- function(df){
   # Calculate co-occurrence by month
   res_month <- df %>% 
     mutate(month = as.character(lubridate::month(t, label = T))) %>% 
-    group_by(lon, lat, month, mke_days, mke_90_days, MHW_days) %>% 
-    summarise(cooc_flat = MHW_days[1]/mke_days[1],
-              cooc_90 = MHW_days[1]/mke_90_days[1])
+    group_by(lon, lat, month, mke_base_days, MHW_base_days, mke_90_days, MHW_90_days) %>% 
+    summarise(cooc_base = MHW_base_days[1]/mke_base_days[1],
+              cooc_90 = MHW_90_days[1]/mke_90_days[1],
+              diff_MHW = MHW_90_days[1]/MHW_base_days[1])
   
   # Calculate total co-occurrence
   res_total <- df %>% 
     mutate(month = "total") %>% 
-    group_by(lon, lat, month, mke_days, mke_90_days, MHW_days) %>% 
-    summarise(cooc_flat = MHW_days[1]/mke_days[1],
-              cooc_90 = MHW_days[1]/mke_90_days[1])
+    group_by(lon, lat, month, mke_base_days, MHW_base_days, mke_90_days, MHW_90_days) %>% 
+    summarise(cooc_base = MHW_base_days[1]/mke_base_days[1],
+              cooc_90 = MHW_90_days[1]/mke_90_days[1],
+              diff_MHW = MHW_90_days[1]/MHW_base_days[1])
   
   # Combine and exit
   res <- rbind(res_month, res_total)
@@ -550,6 +602,8 @@ corr_calc <- function(df){
 }
 
 # Run all the calculations etc.
+# testers...
+# region <- "AC"
 meander_co_calc <- function(region){
   
   # Load masked AVISO and MHW data as well as masks
