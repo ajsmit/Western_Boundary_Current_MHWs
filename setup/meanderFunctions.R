@@ -496,43 +496,40 @@ mask_region <- function(region){
 # df <- AVISO_MHW_50 %>%
   # filter(t == "1995-01-01")
 # eddy_mask <- eddy_masks_region
-# mke_val <- mke_masks_region$mke_90$mke_90[1]
-screen_eddy <- function(df, eddy_mask, mke_val){
-  
-  # Add mask column
-  df <- df %>% 
-    unite(lon, lat, col = "lonlat", sep = "", remove = F)
+merge_eddy <- function(df, eddy_mask){
   
   # Filter only the one date used for the calculation
+  # Also filter out pixels with multiple eddies present
+    # selecting for the largest of the eddies
   eddy_mask_sub <- filter(eddy_mask, time == as.character(df$t[1])) %>% 
-    unite(lon_mask, lat_mask, col = "lonlat", sep = "", remove = F) %>% 
-    dplyr::rename(lon_eddy = lon, lat_eddy = lat)
+    unite(lon_mask, lat_mask, col = "coord_index", sep = "", remove = F) %>% 
+    dplyr::rename(lon_eddy = lon, lat_eddy = lat) %>% 
+    group_by(coord_index) %>% 
+    filter(speed_radius == max(speed_radius, na.rm = T))
   
-  # Filter out pixels with eddy coverage
-  pixels_eddy <- df %>% 
-    filter(mask %in% eddy_mask_sub$mask) %>% 
-    left_join(eddy_mask_sub, by = "lonlat")
-  # Filter out pixels without eddy coverage
-  pixels_no_eddy <- df %>% 
-    filter(!mask %in% eddy_mask_sub$mask) %>% 
-    left_join(eddy_mask_sub, by = "lonlat")
-  
-  ggplot(df, aes(x = lon, y = lat, fill = eke)) +
-    geom_raster()
-  
-  ggplot(eddy_mask_sub, aes(x = lon_mask, y = lat_mask, fill = speed_radius)) +
-    geom_raster()
-  
-  ggplot(pixels_eddy, aes(x = lon, y = lat, fill = eke)) +
-    geom_raster()
-  
-  ggplot(pixels_no_eddy, aes(x = lon, y = lat, fill = eke)) +
-    geom_raster()
-  
+  # Combine and exit
+  res <- df %>% 
+    left_join(eddy_mask_sub, by = "coord_index") #%>%
+    # group_by(lat, lon, t) %>% 
+    # filter(speed_radius == max(speed_radius, na.rm = T)) %>% 
+    # summarise_if(is.numeric, mean, na.rm = T) %>% 
+    # summarise()
+    # ungroup()
+  res[is.na(res)] <- NA
+  return(res)
 }
 
-# Wrapper function for screening out days below the 90th MKE
-screen_mke <- function(df, mke_val){
+# Wrapper function for screening out multiple things
+# testers...
+# df <- AVISO_MHW_50
+# eddy_mask <- eddy_masks_region
+screen_mke_eddy <- function(df, eddy_mask, mke_val){
+  
+  # Add eddy mask information into the AVISO dataframe
+  # This is a very large task...
+  df_eddy <- plyr::ddply(df, .variables = "t", .fun = merge_eddy,
+                         eddy_mask = eddy_mask, .parallel = T)
+  
   # Count base days and the occurrence of MHWs
   res_base <- df %>% 
     group_by(lon, lat) %>%
@@ -613,21 +610,17 @@ meander_co_calc <- function(region){
   eddy_masks_region <- fread(paste0("~/data/WBC/AVISO_eddy_mask_",region,".csv"), nThread = 10)
   
   # Prep the data for further calculations
-  # Screening out MKE below 90th perc. and days with no MHWs
-  print("Screening by MKE")
-  calc_50_base <- screen_mke(AVISO_MHW_50, mke_masks_region$mke_90$mke_90[1])
-  calc_max_base <- screen_mke(AVISO_MHW_max, mke_masks_region$mke_90$mke_90[1])
-  
-  # Screening out pixels under an eddy mask
-  print("Screening by eddies")
-  calc_50_eddy <- screen_eddy(calc_50_base, eddy_masks_region)
-  calc_max_eddy <- screen_eddy(calc_max_base, eddy_masks_region)
+  # CScreen out days when MKE below 90th perc. and days with no MHWs
+  # Also screen days with/out eddies present
+  print("Screening by MKE and eddies")
+  screen_50 <- screen_mke_eddy(AVISO_MHW_50, mke_masks_region$mke_90$mke_90[1])
+  screen_max <- screen_mke_eddy(AVISO_MHW_max, mke_masks_region$mke_90$mke_90[1])
   
   # Calculate the proportion of days when MKE is in the 
   # 90th percentile and MHWs are occurring
   print("Calculating co-occurrence")
-  cooc_50 <- cooc_90(calc_50_eddy)
-  cooc_max <- cooc_90(calc_max_eddy)
+  cooc_50 <- cooc_90(screen_50)
+  cooc_max <- cooc_90(screen_max)
   
   # Calculate correlations
   print("Calculating correlations")
