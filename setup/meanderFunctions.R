@@ -186,7 +186,7 @@ MHW_sub_save <- function(region){
 
 # Function for creating MKE and max intensity masks
 # It expects to be given the AVISO and MHW data as dataframes
-masks <- function(AVISO, MHW){
+mke_masks <- function(AVISO, MHW){
   
   # Find pixels with 90th percentile for max int.
   max_90 <- MHW %>% 
@@ -234,10 +234,12 @@ masks <- function(AVISO, MHW){
 bbox_cells <- function(region){
   AVISO_sub_load(AVISO_files[1],
                  coords = bbox[colnames(bbox) == region][1:4,]) %>% 
-    filter(t == "2000-01-01") %>% 
+    filter(t == "1993-01-01") %>% 
     select(lon, lat) %>% 
     # Create pixel sides
-    mutate(bottom = lat-0.125,
+    mutate(lon = case_when(lon > 180 ~ lon-360,
+                           lon <= 180 ~ lon),
+           bottom = lat-0.125,
            top = lat+0.125,
            left = lon-0.125,
            right = lon+0.125)
@@ -252,7 +254,7 @@ bbox_cells <- function(region){
 # df <- test %>%
 # select(-lon2, -lat2, -time)
 dist_calc <- function(df, cells){
-  if(nrow(df) != 1) stop("df shuold be one row exactly")
+  if(nrow(df) != 1) stop("df should be one row exactly")
   # Create a rough, very conservative, radius value for further filtering of pixels
   # before calculating distance of eddies from nearby pixels
   rough_radius <- ceiling(df$speed_radius/50)
@@ -283,31 +285,50 @@ dist_calc <- function(df, cells){
       select(lon, lat) %>% 
       dplyr::rename(lon_mask = lon, lat_mask = lat)
 
+    if(nrow(cells_filter) == 0){
+      cells_filter <- data.frame(lon_mask = NA, lat_mask = NA)
+    }
     # Combine and exit
-    cells_res <- cbind(df, cells_filter)
-    return(cells_res)
+    # cells_res <- cbind(df, cells_filter)
+    # return(cells_res)
     
   } else {
-    # cells_filter <- data.frame(lon_mask = NA, lat_mask = NA)
+    cells_filter <- data.frame(lon_mask = NA, lat_mask = NA)
   }
   
   # Combine and exit
-  # cells_res <- cbind(df, cells_filter)
-  # return(cells_res)
-  return()
+  cells_res <- cbind(df, cells_filter)
+  return(cells_res)
+  # return()
+}
+
+# This intermediary function helps lighten the load on ddply() in eddy_cells()
+# df <- slice(eddies_sub, 1:100) %>% 
+  # select(-time)
+eddies_inter <- function(df, cells){
+  res <- df %>% 
+    mutate(lon2 = lon, 
+           lat2 = lat) %>% 
+    group_by(lon2, lat2) %>% 
+    nest() %>% 
+    mutate(eddy_res = map(data, dist_calc, cells = cells)) %>% 
+    select(eddy_res) %>% 
+    unnest()
+  return(res)
 }
 
 # This function creates the daily index of pixels with eddies in them
 # testers...
-# region <- "EAC"
-eddy_cells <- function(eddies = eddies, region){
+# region <- "BC"
+# eddies_here <- eddies
+eddy_cells <- function(region, eddies_here){
   
   cells <- bbox_cells(region)
   
   # The +-4 is to allow for a larger bbox due to the size of the largest eddy
   # We still want the extent of the larger eddies to be considered even when
   # the centre of the eddy is no longer within the bounding box
-  eddies_sub <- eddies %>% 
+  eddies_sub <- eddies_here %>% 
     filter(lon <= max(cells$right)+4,
            lon >= min(cells$left)-4,
            lat <= max(cells$top)+4,
@@ -315,24 +336,26 @@ eddy_cells <- function(eddies = eddies, region){
     mutate(lon2 = lon,
            lat2 = lat)
   
-  # test <- eddies_sub[235,]
+  # test <- eddies_sub[103,]
+  # test <- eddies_sub[123,]
   
   # Find the pixels masks by each eddy on each day of the dataset
-  doMC::registerDoMC(cores = 50)
-  system.time(
-  eddies_res <- plyr::ddply(eddies_sub[1:134,], .variables = c("lon2", "lat2", "time"),
+  # doMC::registerDoMC(cores = 50)
+  # system.time(
+  eddies_res <- plyr::ddply(eddies_sub, .variables = c("time"),
                             # .fun = mean, x = "speed_radius", .parallel = T)
-                            .fun = dist_calc, cells = cells, .parallel = TRUE) %>%
-    select(-lon2, -lat2, -time)
-  ) # ~ xxx seconds for EAC
+                            .fun = eddies_inter, cells = cells, .parallel = TRUE) %>% 
+    na.omit()
+  # ) # ~ 363 seconds for EAC
   fwrite(eddies_res, file = paste0("../data/WBC/AVISO_eddy_mask_",region,".csv"), nThread = 10)
   # return(eddies_res)
+  rm(eddies_sub, eddies_res); gc()
 }
 
 # Function for creating the eddy masks
 # This loads the eddy data but then calls eddy_cells() to do the heavy lifting
 # testers...
-# region <- "AC"
+# region <- "BC"
 eddy_masks <- function(){
   
   # Load eddy data
@@ -373,11 +396,16 @@ eddy_masks <- function(){
   # max(eddies$lon, na.rm = T)
   
   # Calculate the eddy masks for each bbox and save
-  eddy_cells("AC")
-  eddy_cells("BC")
-  eddy_cells("EAC")
-  eddy_cells("GS")
-  eddy_cells("KC")
+  print(paste0("Began creating eddy masks for AC at ",Sys.time()))
+  eddy_cells("AC", eddies)
+  print(paste0("Began creating eddy masks for BC at ",Sys.time()))
+  eddy_cells("BC", eddies)
+  print(paste0("Began creating eddy masks for EAC at ",Sys.time()))
+  eddy_cells("EAC", eddies)
+  print(paste0("Began creating eddy masks for GS at ",Sys.time()))
+  eddy_cells("GS", eddies)
+  print(paste0("Began creating eddy masks for KC at ",Sys.time()))
+  eddy_cells("KC", eddies)
   
   # Clean up and exit
   rm(eddies); gc()
@@ -461,7 +489,12 @@ mask_region <- function(region){
 # Calculate cooccurrence and correlation ----------------------------------
 
 # testers...
-# region <- "AC"
+# region <- "EAC"
+
+# Wrapper function for screening out pixels within an eddy masks
+screen_eddy <- function(df, ){
+  
+}
 
 # Wrapper function for screening out days below the 90th MKE
 screen_mke <- function(df, mke_val){
@@ -522,24 +555,30 @@ meander_co_calc <- function(region){
   # Load masked AVISO and MHW data as well as masks
   AVISO_MHW_50 <- fread(paste0("../data/WBC/AVISO_MHW_50_",region,".csv"), nThread = 10)
   AVISO_MHW_max <- fread(paste0("../data/WBC/AVISO_MHW_max_",region,".csv"), nThread = 10)
-  masks <- readRDS(paste0("masks/masks_",region,".Rds"))
+  mke_masks_region <- readRDS(paste0("masks/masks_",region,".Rds"))
+  eddy_masks_region <- fread(paste0("~/data/WBC/AVISO_eddy_mask_",region,".csv"), nThread = 10)
   
   # Prep the data for further calculations
   # Screening out MKE below 90th perc. and days with no MHWs
   print("Screening by MKE")
-  calc_50_base <- screen_mke(AVISO_MHW_50, masks$mke_90$mke_90[1])
-  calc_max_base <- screen_mke(AVISO_MHW_max, masks$mke_90$mke_90[1])
+  calc_50_base <- screen_mke(AVISO_MHW_50, mke_masks_region$mke_90$mke_90[1])
+  calc_max_base <- screen_mke(AVISO_MHW_max, mke_masks_region$mke_90$mke_90[1])
+  
+  # Screening out pixels under an eddy mask
+  print("Screening by eddies")
+  calc_50_eddy <- screen_eddy(calc_50_base, eddy_masks_region)
+  calc_max_eddy <- screen_eddy(calc_max_base, eddy_masks_region)
   
   # Calculate the proportion of days when MKE is in the 
   # 90th percentile and MHWs are occurring
   print("Calculating co-occurrence")
-  cooc_50 <- cooc_90(calc_50_base)
-  cooc_max <- cooc_90(calc_max_base)
+  cooc_50 <- cooc_90(calc_50_eddy)
+  cooc_max <- cooc_90(calc_max_eddy)
   
   # Calculate correlations
   print("Calculating correlations")
-  corr_50 <- corr_calc(calc_50_base)
-  corr_max <- corr_calc(calc_max_base)
+  corr_50 <- corr_calc(calc_50_eddy)
+  corr_max <- corr_calc(calc_max_eddy)
 
   # Merge, save, and clean up
   meander_res <- list(cooc_50 = cooc_50,
@@ -547,7 +586,7 @@ meander_co_calc <- function(region){
                       corr_50 = corr_50,
                       corr_max = corr_max)
   saveRDS(meander_res, file = paste0("correlate/meander_res_",region,".Rds"))
-  rm(AVISO_MHW_50, AVISO_MHW_max, calc_50_base, calc_max_base, 
+  rm(AVISO_MHW_50, AVISO_MHW_max, calc_50_base, calc_max_base, calc_50_eddy, calc_max_eddy,
      cooc_50, cooc_max, corr_50, corr_max,meander_res); gc()
 }
 

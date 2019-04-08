@@ -83,7 +83,7 @@ doMC::registerDoMC(cores = 50)
 #   print("Data loaded")
 # 
 #   # Create the masks
-#   masks(AVISO = AVISO_KE, MHW = MHW_event)
+#   mke_masks(AVISO = AVISO_KE, MHW = MHW_event)
 #   print(paste0("Finished run on ",region," at ",Sys.time()))
 # 
 #   # Clear up some RAM
@@ -97,7 +97,7 @@ doMC::registerDoMC(cores = 50)
 # and finds which pixels in each bbox are within the radius and centre point
 # of all of the recorded eddies from 1993-01-01 to 2019-
 doMC::registerDoMC(cores = 50)
-eddy_masks()
+# eddy_masks()
 
 
 # Mask regions ------------------------------------------------------------
