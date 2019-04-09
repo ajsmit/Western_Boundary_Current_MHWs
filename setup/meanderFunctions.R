@@ -509,7 +509,8 @@ merge_eddy <- function(df, eddy_mask){
   
   # Combine and exit
   res <- df %>% 
-    left_join(eddy_mask_sub, by = "coord_index")
+    left_join(eddy_mask_sub, by = "coord_index") %>% 
+    mutate_if(is.numeric, round, 3)
   return(res)
 }
 
@@ -679,7 +680,7 @@ meander_co_calc <- function(region){
   # Merge eddy masks into data
   print("Merging eddy masks")
   # NB: 50 cores uses too much RAM
-  doMC::registerDoMC(cores = 40)
+  doMC::registerDoMC(cores = 30)
   eddy_merge_50 <- plyr::ddply(AVISO_MHW_50, .variables = "t", .fun = merge_eddy,
                                eddy_mask = eddy_masks_region, .parallel = T)
   eddy_merge_max <- plyr::ddply(AVISO_MHW_max, .variables = "t", .fun = merge_eddy,
