@@ -68,10 +68,10 @@ load_data <- function(region) {
 dat <- load_data(region)
 plt.dat <- dat[t >= "2015-07-01" & t <= "2018-06-30", ]
 plt.dat[, cum := cumsum(ev), by = c("lon", "lat")]
-summary(plt.dat)
-test.dat <- dat[t >= "2015-07-01" & t <= "2015-07-31", ]
-test.dat[, cum := cumsum(ev), by = c("lon", "lat")]
-summary(test.dat)
+# summary(plt.dat)
+# test.dat <- dat[t >= "2015-07-01" & t <= "2015-07-31", ]
+# test.dat[, cum := cumsum(ev), by = c("lon", "lat")]
+# summary(test.dat)
 
 
 # The plot function -------------------------------------------------------
@@ -86,8 +86,8 @@ combo_plot <- function(data, plot.parameters, region) {
     geom_raster(aes(fill = ex)) +
     # geom_polygon(data = mke90, aes(long, lat, group = group),
     #              fill = alpha("gray50", 0.5), colour = "red3", size = 0.3) +
-    # geom_polygon(data = int90, aes(long, lat, group = group),
-    #              fill = alpha("#c83c7e", 1.0), colour = NA) +
+    geom_polygon(data = int90, aes(long, lat, group = group),
+                 fill = NA, colour = "purple", size = 0.2) +
     # geom_polygon(data = eke75, aes(long, lat, group = group),
     #              fill = alpha("gray50", 0.5), colour = "navy", size = 0.3,
     #              linetype = "dashed") +
@@ -111,14 +111,14 @@ combo_plot <- function(data, plot.parameters, region) {
     geom_raster(aes(fill = eke)) +
     # geom_polygon(data = mke90, aes(long, lat, group = group),
     #              fill = alpha("gray50", 0.5), colour = "red3", size = 0.3) +
-    # geom_polygon(data = int90, aes(long, lat, group = group),
-    #              fill = alpha("#c83c7e", 1.0), colour = NA) +
+    geom_polygon(data = int90, aes(long, lat, group = group),
+                 fill = NA, colour = "purple", size = 0.2) +
     # geom_polygon(data = eke75, aes(long, lat, group = group),
     #              fill = alpha("gray50", 0.5), colour = "navy", size = 0.3,
     #              linetype = "dashed") +
     geom_polygon(data = eke90, aes(long, lat, group = group),
                  fill = NA, colour = "navy", size = 0.2) +
-    scale_fill_continuous_sequential(palette = "Inferno", na.value = "#011789", rev = TRUE) +
+    scale_fill_continuous_sequential(palette = "Viridis", na.value = "#011789", rev = TRUE, breaks = c(500, 4100, 7700)) +
     guides(fill = "none") +
     theme_map() + labs(x = NULL, y = NULL) +
     plot.parameters + labs(subtitle = "Gestrophic velocity", title = as.character(unique(data$t)))
@@ -130,8 +130,8 @@ combo_plot <- function(data, plot.parameters, region) {
     geom_raster(aes(fill = anom)) +
     # geom_polygon(data = mke90, aes(long, lat, group = group),
     #              fill = alpha("gray50", 0.5), colour = "red3", size = 0.3) +
-    # geom_polygon(data = int90, aes(long, lat, group = group),
-    #              fill = alpha("#c83c7e", 1.0), colour = NA) +
+    geom_polygon(data = int90, aes(long, lat, group = group),
+                 fill = NA, colour = "purple", size = 0.2) +
     # geom_polygon(data = eke75, aes(long, lat, group = group),
     #              fill = alpha("gray50", 0.5), colour = "navy", size = 0.3,
     #              linetype = "dashed") +
@@ -152,19 +152,19 @@ combo_plot <- function(data, plot.parameters, region) {
     theme_map() + labs(x = NULL, y = NULL) +
     plot.parameters + labs(subtitle = "SST anomaly", title = " ")
 
-  bottom_right <- ggplot(data, aes(x = lon, y = lat)) +
-    geom_raster(aes(fill = cum)) +
-    scale_fill_continuous_sequential(palette = "Purples 3", na.value = "#011789", rev = TRUE,
-                                    limits = c(0, 667)) +
-    guides(fill = "none") +
-    theme_map() + labs(x = NULL, y = NULL) +
-    plot.parameters + labs(subtitle = "Event count", title = " ")
+  # bottom_right <- ggplot(data, aes(x = lon, y = lat)) +
+  #   geom_raster(aes(fill = cum)) +
+  #   scale_fill_continuous_sequential(palette = "Purples 3", na.value = "#011789", rev = TRUE,
+  #                                   limits = c(0, 667)) +
+  #   guides(fill = "none") +
+  #   theme_map() + labs(x = NULL, y = NULL) +
+  #   plot.parameters + labs(subtitle = "Event count", title = " ")
 
-  fig <- ggarrange(top_left, top_right, bottom_left, bottom_right, ncol = 2, nrow = 2)
+  fig <- ggarrange(top_left, top_right, bottom_left, ncol = 1, nrow = 3)
 
   ggsave(filename = paste0("~/temp/", region, "/", data[1, "no"], "-", region, "-",
                            as.character(unique(data$t)), "-anim_sequence.jpg"),
-         plot = fig, width = 2.0626, height = 0.858 * 2, scale = 3.7)
+         plot = fig, width = 1.0313, height = 1.287 * 2, scale = 3.7)
 }
 
 # Apply the function! -----------------------------------------------------

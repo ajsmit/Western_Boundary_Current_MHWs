@@ -16,7 +16,7 @@ source("setup/plot.layers.R")
 
 # Read in monthly Aviso+ --------------------------------------------------
 
-csvDir <- "/Volumes/Benguela/spatial/processed/Aviso+/WBC/mean"
+csvDir <- "/Volumes/Benguela/spatial/processed/Aviso/WBC/mean"
 mAC.sl <- fread(paste0(csvDir, "/mean_AC_sla-19930101-20181023.csv"))
 mBC.sl <- fread(paste0(csvDir, "/mean_BC_sla-19930101-20181023.csv"))
 mEAC.sl <- fread(paste0(csvDir, "/mean_EAC_sla-19930101-20181023.csv"))

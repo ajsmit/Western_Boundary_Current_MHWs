@@ -32,7 +32,7 @@ library(colorspace)
 library(scales)
 library(RcppRoll)
 library(ggpubr)
-library(doMC); doMC::registerDoMC(cores = 4)
+library(doMC); doMC::registerDoMC(cores = 3)
 
 # read in the region-specific components
 source("setup/plot.layers.R")

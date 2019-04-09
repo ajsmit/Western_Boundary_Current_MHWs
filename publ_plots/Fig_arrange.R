@@ -9,25 +9,20 @@ Fig.1 <- ggarrange(AC.Fig00a + labs(title = "Mean kinetic energy"),
                    AC.Fig00b + labs(title = "Eddy kinetic energy"),
                    AC.Fig018 + labs(title = "Eddy trajectories"),
                    AC.Fig06 + labs(title = "Heatwave intensity"),
-                   ncol = 2, nrow = 2, labels = list("a", "b", "c", "d"))
+                   ncol = 2, nrow = 2, labels = "AUTO")
 ggplot2::ggsave("publ_plots/Figure_1.jpg",
                 width = 7.0 * (1/3), height = 5.2 * (1/3), scale = 3.7)
 
 
 # •	Suppl. Fig. 1 (a-t). Full set of panels corresponding to Fig. 1.
-Supp.1 <- ggarrange(AC.fig05,
-                    AC.fig09,
-                    BC.fig05,
-                    BC.fig09
-                    EAC.fig05,
-                    EAC.fig09
-                    GS.fig05,
-                    GS.fig09
-                    KC.fig05,
-                    KC.fig09,
-                    ncol = 2, nrow = 5, labels = "auto")
+Supp.1 <- ggarrange(AC.Fig00a, AC.Fig00b, AC.Fig018, AC.Fig06,
+                    BC.Fig00a, BC.Fig00b, BC.Fig018, BC.Fig06,
+                    EAC.Fig00a, EAC.Fig00b, EAC.Fig018, EAC.Fig06,
+                    GS.Fig00a, GS.Fig00b, GS.Fig018, GS.Fig06,
+                    KC.Fig00a, KC.Fig00b, KC.Fig018, KC.Fig06,
+                    ncol = 4, nrow = 5, labels = "AUTO")
 ggplot2::ggsave("publ_plots/Suppl.Fig.1.jpg",
-                width = 7.0 * (1/3), height = 13 * (1/3), scale = 3.7)
+                width = 14.0 * (1/3), height = 13 * (1/3), scale = 3.7)
 
 # •	Suppl. Fig. 2 (a-d). Full set of panels of SST mean trend.
 Supp.2 <- ggarrange(AC.Fig04,
@@ -35,7 +30,7 @@ Supp.2 <- ggarrange(AC.Fig04,
                     EAC.Fig04,
                     GS.Fig04,
                     KC.Fig04,
-                    ncol = 1, nrow = 5, labels = "auto")
+                    ncol = 1, nrow = 5, labels = "AUTO")
 ggplot2::ggsave("publ_plots/Suppl.Fig.2.jpg",
                 width = 3.5 * (1/3), height = 13 * (1/3), scale = 3.7)
 
@@ -45,7 +40,7 @@ Fig.2 <- ggarrange(AC.poly.plt,
                    EAC.poly.plt,
                    GS.poly.plt,
                    KC.poly.plt,
-                   ncol = 1, nrow = 5, labels = "auto")
+                   ncol = 1, nrow = 5, labels = "AUTO")
 ggplot2::ggsave("publ_plots/Figure_2.jpg",
                 width = 3.5 * (1/3), height = 13 * (1/3), scale = 3.7)
 
@@ -55,7 +50,7 @@ Fig.3 <- ggarrange(AC.fig0x[[1]] + labs(title = "Mean kinetic energy"), AC.fig0x
                    EAC.fig0x[[1]] + labs(title = ""), EAC.fig0x[[2]] + labs(title = ""),
                    GS.fig0x[[1]] + labs(title = ""), GS.fig0x[[2]] + labs(title = ""),
                    KC.fig0x[[1]] + labs(title = ""), KC.fig0x[[2]] + labs(title = ""),
-                   ncol = 2, nrow = 5, labels = "auto")
+                   ncol = 2, nrow = 5, labels = "AUTO")
 ggplot2::ggsave("publ_plots/Figure_3.jpg",
                 width = 7.0 * (1/3), height = 13 * (1/3), scale = 3.7)
 
@@ -65,7 +60,7 @@ Fig.4 <- ggarrange(AC.Fig010 + labs(title = "Mean MHW intensity trend"), AC.Fig0
                    EAC.Fig010 + labs(title = ""), EAC.Fig016_v2 + labs(title = ""),
                    GS.Fig010 + labs(title = ""), GS.Fig016_v2 + labs(title = ""),
                    KC.Fig010 + labs(title = ""), KC.Fig016_v2 + labs(title = ""),
-                   ncol = 2, nrow = 5, labels = "auto")
+                   ncol = 2, nrow = 5, labels = "AUTO")
 ggplot2::ggsave("publ_plots/Figure_4.jpg",
                 width = 7.0 * (1/3), height = 13 * (1/3), scale = 3.7)
 
@@ -75,7 +70,7 @@ Supp.4 <- ggarrange(AC.Fig010 + labs(title = "MHW mean int. trend"), AC.Fig016_v
                     EAC.Fig010 + labs(title = ""), EAC.Fig016_v2 + labs(title = ""), EAC.Fig013_v2 + labs(title = ""),
                     GS.Fig010 + labs(title = ""), GS.Fig016_v2 + labs(title = ""), GS.Fig013_v2 + labs(title = ""),
                     KC.Fig010 + labs(title = ""), KC.Fig016_v2 + labs(title = ""), KC.Fig013_v2 + labs(title = ""),
-                    ncol = 3, nrow = 5, labels = "auto")
+                    ncol = 3, nrow = 5, labels = "AUTO")
 ggplot2::ggsave("publ_plots/Suppl.Fig.4.jpg",
                 width = 10.5 * (1/3), height = 13 * (1/3), scale = 3.7)
 
