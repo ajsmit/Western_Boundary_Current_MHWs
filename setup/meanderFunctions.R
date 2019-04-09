@@ -509,49 +509,79 @@ merge_eddy <- function(df, eddy_mask){
   
   # Combine and exit
   res <- df %>% 
-    left_join(eddy_mask_sub, by = "coord_index") #%>%
-    # group_by(lat, lon, t) %>% 
-    # filter(speed_radius == max(speed_radius, na.rm = T)) %>% 
-    # summarise_if(is.numeric, mean, na.rm = T) %>% 
-    # summarise()
-    # ungroup()
-  res[is.na(res)] <- NA
+    left_join(eddy_mask_sub, by = "coord_index")
   return(res)
 }
 
 # Wrapper function for screening out multiple things
 # testers...
-# df <- AVISO_MHW_50
-# eddy_mask <- eddy_masks_region
-screen_mke_eddy <- function(df, eddy_mask, mke_val){
+# df <- eddy_merge_50
+# mke_val <- mke_masks_region$mke_90$mke_90[1]
+count_mke_eddy <- function(df, mke_val){
   
-  # Add eddy mask information into the AVISO dataframe
-  # This is a very large task...
-  df_eddy <- plyr::ddply(df, .variables = "t", .fun = merge_eddy,
-                         eddy_mask = eddy_mask, .parallel = T)
-  
-  # Count base days and the occurrence of MHWs
-  res_base <- df %>% 
+  # Count base days + days with MHWs
+  days_base <- df %>% 
+    # NB: This is where month grouping would be added to investigate that pattern
+    # An earlier version of the code showed no clear monthly pattern
+    # So I've stopped calculating it here
+    # mutate(month = as.character(lubridate::month(t, label = T))) %>%
     group_by(lon, lat) %>%
-    mutate(mke_base_days = n()) %>%
+    mutate(mke_base_days = n()) %>% 
+    group_by(lon, lat, mke_base_days) %>% 
     filter(event == TRUE) %>%
-    # filter(mke >= mke_val) %>%
-    mutate(MHW_base_days = n()) #%>% 
-    # mutate(MHW_days = n())
+    summarise(MHW_base_days = n())
   
-  # Screen out days below 90th perc. MKE and count days with MHWs
-  res_90 <- df %>% 
-    group_by(lon, lat) %>%
-    # mutate(mke_days = n()) %>%
+  # Count days at/above 90th perc. MKE + days with MHWs
+  days_90 <- df %>% 
     filter(mke >= mke_val) %>%
+    group_by(lon, lat) %>%
     mutate(mke_90_days = n()) %>% 
+    group_by(lon, lat, mke_90_days) %>% 
     filter(event == TRUE) %>%
-    mutate(MHW_90_days = n())
+    summarise(MHW_90_days = n())
+  
+  # Count days with eddies + days with MHWs
+  days_eddy <- df %>% 
+    filter(amplitude > 0) %>%
+    group_by(lon, lat) %>%
+    mutate(eddy_days = n()) %>% 
+    group_by(lon, lat, eddy_days) %>% 
+    filter(event == TRUE) %>%
+    summarise(MHW_eddy_days = n())
+  
+  # Count days with eddies + days with MHWs
+  days_cyclone <- df %>% 
+    filter(cyclonic_type == -1) %>%
+    group_by(lon, lat) %>%
+    mutate(cyclone_days = n()) %>% 
+    group_by(lon, lat, cyclone_days) %>% 
+    filter(event == TRUE) %>%
+    summarise(MHW_cyclone_days = n())
+  
+  # Count days with eddies + days with MHWs
+  days_anticyclone <- df %>% 
+    filter(cyclonic_type == 1) %>%
+    group_by(lon, lat) %>%
+    mutate(anticyclone_days = n()) %>% 
+    group_by(lon, lat, anticyclone_days) %>% 
+    filter(event == TRUE) %>%
+    summarise(MHW_anticyclone_days = n())
+  
+  # Count days without eddies + days with MHWs
+  days_no_eddy <- df %>% 
+    filter(is.na(amplitude)) %>%
+    group_by(lon, lat) %>%
+    mutate(no_eddy_days = n()) %>% 
+    group_by(lon, lat, no_eddy_days) %>% 
+    filter(event == TRUE) %>%
+    summarise(MHW_no_eddy_days = n())
   
   # Combine and exit
-  res <- left_join(res_base, res_90, 
-                   by = c("lon", "lat", "t", "mke", "eke", "coord_index",
-                          "temp", "seas", "thresh", "event", "event_no", "intensity"))
+  res <- left_join(days_base, days_90, by = c("lon", "lat")) %>% 
+    left_join(days_eddy, by = c("lon", "lat")) %>% 
+    left_join(days_cyclone, by = c("lon", "lat")) %>% 
+    left_join(days_anticyclone, by = c("lon", "lat")) %>% 
+    left_join(days_no_eddy, by = c("lon", "lat"))
   return(res)
 }
 
@@ -559,42 +589,58 @@ screen_mke_eddy <- function(df, eddy_mask, mke_val){
 cooc_90 <- function(df){
   
   # Calculate co-occurrence by month
-  res_month <- df %>% 
-    mutate(month = as.character(lubridate::month(t, label = T))) %>% 
-    group_by(lon, lat, month, mke_base_days, MHW_base_days, mke_90_days, MHW_90_days) %>% 
-    summarise(cooc_base = MHW_base_days[1]/mke_base_days[1],
-              cooc_90 = MHW_90_days[1]/mke_90_days[1],
-              diff_MHW = MHW_90_days[1]/MHW_base_days[1])
+  # res_month <- df %>% 
+  #   mutate(month = as.character(lubridate::month(t, label = T))) %>% 
+  #   group_by(lon, lat, month, mke_base_days, MHW_base_days, mke_90_days, MHW_90_days) %>% 
+  #   summarise(cooc_base = MHW_base_days[1]/mke_base_days[1],
+  #             cooc_90 = MHW_90_days[1]/mke_90_days[1],
+  #             diff_MHW = MHW_90_days[1]/MHW_base_days[1])
   
   # Calculate total co-occurrence
-  res_total <- df %>% 
-    mutate(month = "total") %>% 
-    group_by(lon, lat, month, mke_base_days, MHW_base_days, mke_90_days, MHW_90_days) %>% 
-    summarise(cooc_base = MHW_base_days[1]/mke_base_days[1],
-              cooc_90 = MHW_90_days[1]/mke_90_days[1],
-              diff_MHW = MHW_90_days[1]/MHW_base_days[1])
+  res_total <- count_50 %>% 
+    # mutate(month = "total") %>% 
+    group_by(lon, lat) %>% 
+    summarise(cooc_base = MHW_base_days/mke_base_days,
+              cooc_90 = MHW_90_days/mke_90_days,
+              prop_90_MHW = MHW_90_days/MHW_base_days,
+              cooc_eddy = MHW_eddy_days/eddy_days,
+              prop_eddy_MHW = MHW_eddy_days/MHW_base_days,
+              prop_eddy = eddy_days/mke_base_days,
+              cooc_cyclone = MHW_cyclone_days/cyclone_days,
+              prop_cyclone_MHW = MHW_cyclone_days/MHW_base_days,
+              cooc_anticyclone = MHW_anticyclone_days/anticyclone_days,
+              prop_anticyclone_MHW = MHW_anticyclone_days/MHW_base_days,
+              prop_cyclone = cyclone_days/anticyclone_days,
+              cooc_no_eddy = MHW_no_eddy_days/no_eddy_days,
+              prop_no_eddy_MHW = MHW_no_eddy_days/MHW_base_days)
   
   # Combine and exit
-  res <- rbind(res_month, res_total)
-  return(res)
+  return(res_total)
+  # res <- rbind(res_month, res_total)
+  # return(res)
 }
 
+# Wrapper function for calculating correlations between metrics
 corr_calc <- function(df){
   
   # Calculate crrelations by month
-  res_month <- df %>% 
-    mutate(month = as.character(lubridate::month(t, label = T))) %>% 
-    group_by(lon, lat, month) %>% 
-    summarise(mke_intensity_r = cor(intensity, mke, use = "pairwise.complete.obs"))
+  # res_month <- df %>% 
+  #   mutate(month = as.character(lubridate::month(t, label = T))) %>% 
+  #   group_by(lon, lat, month) %>% 
+  #   summarise(mke_intensity_r = cor(intensity, mke, use = "pairwise.complete.obs"))
   
   # Calculate total correlations
-  res_total <- df %>% 
-    mutate(month = "total") %>% 
-    group_by(lon, lat, month) %>% 
+  res_int_mke <- df %>% 
+    # mutate(month = "total") %>% 
+    group_by(lon, lat) %>%
     summarise(mke_intensity_r = cor(intensity, mke, use = "pairwise.complete.obs"))
   
+  res_int_rad <- df %>% 
+    group_by(lon, lat) %>%
+    summarise(rad_intensity_r = cor(intensity, speed_radius, use = "pairwise.complete.obs"))
+  
   # Combine and exit
-  res <- rbind(res_month, res_total)
+  res <- left_join(res_int_mke, res_int_rad, by = c("lon", "lat"))
   return(res)
 }
 
@@ -609,23 +655,31 @@ meander_co_calc <- function(region){
   mke_masks_region <- readRDS(paste0("masks/masks_",region,".Rds"))
   eddy_masks_region <- fread(paste0("~/data/WBC/AVISO_eddy_mask_",region,".csv"), nThread = 10)
   
+  # Merge eddy masks into data
+  print("Merging eddy masks")
+  # NB: 50 cores uses too much RAM
+  doMC::registerDoMC(cores = 40)
+  eddy_merge_50 <- plyr::ddply(AVISO_MHW_50, .variables = "t", .fun = merge_eddy,
+                               eddy_mask = eddy_mask, .parallel = T)
+  eddy_merge_max <- plyr::ddply(AVISO_MHW_max, .variables = "t", .fun = merge_eddy,
+                                eddy_mask = eddy_mask, .parallel = T)
+  
   # Prep the data for further calculations
-  # CScreen out days when MKE below 90th perc. and days with no MHWs
+  # Screen out days when MKE below 90th perc. and days with no MHWs
   # Also screen days with/out eddies present
   print("Screening by MKE and eddies")
-  screen_50 <- screen_mke_eddy(AVISO_MHW_50, mke_masks_region$mke_90$mke_90[1])
-  screen_max <- screen_mke_eddy(AVISO_MHW_max, mke_masks_region$mke_90$mke_90[1])
+  count_50 <- count_mke_eddy(eddy_merge_50, mke_masks_region$mke_90$mke_90[1])
+  count_max <- count_mke_eddy(eddy_merge_max, mke_masks_region$mke_90$mke_90[1])
   
-  # Calculate the proportion of days when MKE is in the 
-  # 90th percentile and MHWs are occurring
+  # Calculate rates of co-occurrence between types of days and MHWs
   print("Calculating co-occurrence")
-  cooc_50 <- cooc_90(screen_50)
-  cooc_max <- cooc_90(screen_max)
+  cooc_50 <- cooc_90(count_50)
+  cooc_max <- cooc_90(count_max)
   
   # Calculate correlations
   print("Calculating correlations")
-  corr_50 <- corr_calc(calc_50_eddy)
-  corr_max <- corr_calc(calc_max_eddy)
+  corr_50 <- corr_calc(eddy_merge_50)
+  corr_max <- corr_calc(eddy_merge_max)
 
   # Merge, save, and clean up
   meander_res <- list(cooc_50 = cooc_50,
@@ -633,16 +687,17 @@ meander_co_calc <- function(region){
                       corr_50 = corr_50,
                       corr_max = corr_max)
   saveRDS(meander_res, file = paste0("correlate/meander_res_",region,".Rds"))
-  rm(AVISO_MHW_50, AVISO_MHW_max, calc_50_base, calc_max_base, calc_50_eddy, calc_max_eddy,
-     cooc_50, cooc_max, corr_50, corr_max,meander_res); gc()
+  rm(AVISO_MHW_50, AVISO_MHW_max, mke_masks_region, eddy_masks_region, 
+     eddy_merge_50, eddy_merge_max, count_50, count_max, cooc_50, cooc_max, 
+     corr_50, corr_max, meander_res); gc()
 }
 
 
 # Visualise results -------------------------------------------------------
 
 # testers...
-# region <- "GS"
-# df <- meander_res$corr_50
+# region <- "AC"
+df <- meander_res$cooc_50
 
 # Quick list capable prep function for plotting consistency
 list_prep <- function(df){
