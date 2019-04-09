@@ -140,13 +140,13 @@ doMC::registerDoMC(cores = 50)
 doMC::registerDoMC(cores = 50)
 
 # Calculate the results in serial
-# for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
-#   region <- colnames(bbox)[i]
-#   print(paste0("Began run on ",region," at ",Sys.time()))
-#   meander_co_calc(region)
-#   print(paste0("Finished run on ",region," at ",Sys.time()))
-#   gc()
-# } # ~30 seconds each
+for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
+  region <- colnames(bbox)[i]
+  print(paste0("Began run on ",region," at ",Sys.time()))
+  meander_co_calc(region)
+  print(paste0("Finished run on ",region," at ",Sys.time()))
+  gc()
+} # ~30 seconds each
 
 
 # Visualise results -------------------------------------------------------

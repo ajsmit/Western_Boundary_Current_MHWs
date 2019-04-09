@@ -542,14 +542,14 @@ count_mke_eddy <- function(df, mke_val){
   
   # Count days with eddies + days with MHWs
   days_eddy <- df %>% 
-    filter(amplitude > 0) %>%
+    filter(!is.na(amplitude)) %>%
     group_by(lon, lat) %>%
     mutate(eddy_days = n()) %>% 
     group_by(lon, lat, eddy_days) %>% 
     filter(event == TRUE) %>%
     summarise(MHW_eddy_days = n())
   
-  # Count days with eddies + days with MHWs
+  # Count days with cyclonic eddies + days with MHWs
   days_cyclone <- df %>% 
     filter(cyclonic_type == -1) %>%
     group_by(lon, lat) %>%
@@ -558,7 +558,7 @@ count_mke_eddy <- function(df, mke_val){
     filter(event == TRUE) %>%
     summarise(MHW_cyclone_days = n())
   
-  # Count days with eddies + days with MHWs
+  # Count days with anticyclonic eddies + days with MHWs
   days_anticyclone <- df %>% 
     filter(cyclonic_type == 1) %>%
     group_by(lon, lat) %>%
@@ -576,16 +576,28 @@ count_mke_eddy <- function(df, mke_val){
     filter(event == TRUE) %>%
     summarise(MHW_no_eddy_days = n())
   
+  # Count days without eddies and in the 90th perc. mke + days with MHWs
+  days_no_eddy_90 <- df %>% 
+    filter(is.na(amplitude),
+           mke >= mke_val) %>%
+    group_by(lon, lat) %>%
+    mutate(no_eddy_90_days = n()) %>% 
+    group_by(lon, lat, no_eddy_90_days) %>% 
+    filter(event == TRUE) %>%
+    summarise(MHW_no_eddy_90_days = n())
+  
   # Combine and exit
   res <- left_join(days_base, days_90, by = c("lon", "lat")) %>% 
     left_join(days_eddy, by = c("lon", "lat")) %>% 
     left_join(days_cyclone, by = c("lon", "lat")) %>% 
     left_join(days_anticyclone, by = c("lon", "lat")) %>% 
-    left_join(days_no_eddy, by = c("lon", "lat"))
+    left_join(days_no_eddy, by = c("lon", "lat")) %>% 
+    left_join(days_no_eddy_90, by = c("lon", "lat"))
   return(res)
 }
 
 # Wrapper function for finding co-occurrence rates
+# df <- count_50
 cooc_90 <- function(df){
   
   # Calculate co-occurrence by month
@@ -596,23 +608,32 @@ cooc_90 <- function(df){
   #             cooc_90 = MHW_90_days[1]/mke_90_days[1],
   #             diff_MHW = MHW_90_days[1]/MHW_base_days[1])
   
-  # Calculate total co-occurrence
-  res_total <- count_50 %>% 
+  # Calculate total co-occurrence and proportions of occurrence
+  res_total <- df %>% 
     # mutate(month = "total") %>% 
     group_by(lon, lat) %>% 
+    # Co-occurrence values
     summarise(cooc_base = MHW_base_days/mke_base_days,
               cooc_90 = MHW_90_days/mke_90_days,
-              prop_90_MHW = MHW_90_days/MHW_base_days,
               cooc_eddy = MHW_eddy_days/eddy_days,
-              prop_eddy_MHW = MHW_eddy_days/MHW_base_days,
-              prop_eddy = eddy_days/mke_base_days,
               cooc_cyclone = MHW_cyclone_days/cyclone_days,
-              prop_cyclone_MHW = MHW_cyclone_days/MHW_base_days,
               cooc_anticyclone = MHW_anticyclone_days/anticyclone_days,
-              prop_anticyclone_MHW = MHW_anticyclone_days/MHW_base_days,
-              prop_cyclone = cyclone_days/anticyclone_days,
               cooc_no_eddy = MHW_no_eddy_days/no_eddy_days,
-              prop_no_eddy_MHW = MHW_no_eddy_days/MHW_base_days)
+              cooc_no_eddy_90 = MHW_no_eddy_90_days/no_eddy_90_days,
+              # Proportion values
+              prop_90 = mke_90_days/mke_base_days,
+              prop_90_MHW = MHW_90_days/MHW_base_days,
+              prop_eddy = eddy_days/mke_base_days,
+              prop_eddy_MHW = MHW_eddy_days/MHW_base_days,
+              prop_cyclone = cyclone_days/mke_base_days,
+              prop_cyclone_MHW = MHW_cyclone_days/MHW_base_days,
+              prop_anticyclone = anticyclone_days/mke_base_days,
+              prop_anticyclone_MHW = MHW_anticyclone_days/MHW_base_days,
+              prop_cyclone_anticyclone = cyclone_days/anticyclone_days,
+              prop_no_eddy = no_eddy_days/mke_base_days,
+              prop_no_eddy_MHW = MHW_no_eddy_days/MHW_base_days,
+              prop_no_eddy_90 = no_eddy_90_days/mke_base_days,
+              prop_no_eddy_90_MHW = MHW_no_eddy_90_days/MHW_base_days)
   
   # Combine and exit
   return(res_total)
@@ -660,9 +681,9 @@ meander_co_calc <- function(region){
   # NB: 50 cores uses too much RAM
   doMC::registerDoMC(cores = 40)
   eddy_merge_50 <- plyr::ddply(AVISO_MHW_50, .variables = "t", .fun = merge_eddy,
-                               eddy_mask = eddy_mask, .parallel = T)
+                               eddy_mask = eddy_masks_region, .parallel = T)
   eddy_merge_max <- plyr::ddply(AVISO_MHW_max, .variables = "t", .fun = merge_eddy,
-                                eddy_mask = eddy_mask, .parallel = T)
+                                eddy_mask = eddy_masks_region, .parallel = T)
   
   # Prep the data for further calculations
   # Screen out days when MKE below 90th perc. and days with no MHWs
@@ -697,24 +718,24 @@ meander_co_calc <- function(region){
 
 # testers...
 # region <- "AC"
-df <- meander_res$cooc_50
+# df <- meander_res$cooc_50
 
 # Quick list capable prep function for plotting consistency
 list_prep <- function(df){
-  if("cooc_flat" %in% colnames(df)){
+  # if("cooc_flat" %in% colnames(df)){
     res <- df %>% 
-      ungroup() %>% 
-      select(lon, lat, month, cooc_flat, cooc_90) %>% 
-      gather(key = metric, value = val, -lon, -lat, -month)
-  } else {
-    res <- df %>% 
-      dplyr::rename(val = mke_intensity_r) %>% 
-      mutate(metric = "mke_intensity_r")
-  }
+      # ungroup() %>% 
+      # select(lon, lat) %>% 
+      gather(key = metric, value = val, -lon, -lat)
+  # } else {
+  #   res <- df %>% 
+  #     dplyr::rename(val = mke_intensity_r) %>% 
+  #     mutate(metric = "mke_intensity_r")
+  # }
   # Not working for "total"...
-  res$month <- factor(res$month, levels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "total"))
-  res$month[is.na(res$month)] <- "total"
+  # res$month <- factor(res$month, levels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  #                                           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "total"))
+  # res$month[is.na(res$month)] <- "total"
   res <- res %>% 
     ungroup() %>% 
     mutate(lon = ifelse(lon > 180, lon-360, lon),
@@ -723,8 +744,25 @@ list_prep <- function(df){
 }
 
 # Create a single faceted plot
-plot_res <- function(df, month_facet, scale_label, scale_type, coords){
-  fig_res <- ggplot(df, aes(x = lon, y = lat)) +
+# df <- filter(meander_prep$cooc_50)
+# scale_label <- "co-occurrence\nproportion"
+# scale_type <- "cooc"
+# coords <- coords
+plot_res <- function(df, scale_label, scale_type, coords){
+  
+  # Screen out desired data
+  if(scale_type == "cooc"){
+    df_prep <- df %>%
+      filter(!grepl("prop", metric))
+  } else if(scale_type == "prop") {
+    df_prep <- df %>%
+      filter(!grepl("cooc", metric))
+  } else {
+    df_prep <- df
+  }
+  
+  # Create the base figure
+  fig_res <- ggplot(df_prep, aes(x = lon, y = lat)) +
     geom_tile(aes(fill = val), na.rm = T) +
     borders(fill = "grey80", colour = "black") +
     coord_equal(xlim = c(coords[3:4]), ylim = c(coords[1:2])) +
@@ -732,21 +770,14 @@ plot_res <- function(df, month_facet, scale_label, scale_type, coords){
     ggtitle(region) +
     # scale_fill_viridis_c(scale_label,  option = "A", na.value = NA) +
     # facet_wrap(~metric, ncol = 1) +
-    theme(legend.position = "bottom")
+    facet_wrap(~metric)
   if(scale_type == "cooc"){
     # fig_scale <- fig_res + scale_fill_viridis_c(scale_label,  option = "A", na.value = NA)
-    fig_scale <- fig_res + scale_fill_gradientn(colors = viridis::viridis(n = 9, option = "A"), limits = c(0, 1))
+    fig_scale <- fig_res + scale_fill_gradientn("co-ocurrence", colors = viridis::viridis(n = 9, option = "A"), limits = c(0, 1))
   } else {
     fig_scale <- fig_res + scale_fill_gradient2(low = "blue", high = "red")
   }
-  if(month_facet){
-    fig_res_facet <- fig_scale +
-      facet_wrap(month~metric, ncol = 6)
-  } else {
-    fig_res_facet <- fig_scale +
-      facet_wrap(~metric, ncol = 1)
-  }
-  return(fig_res_facet)
+  return(fig_scale)
 }
 
 # This function creates all of the current visual outputs
@@ -760,11 +791,11 @@ meander_vis <- function(region){
   fig_width <- length(seq(coords[3], coords[4], 1))/5
   
   # Prep the data
-  meander_res <- readRDS(paste0("correlate/meander_res_",region,".Rds")) 
+  meander_res <- readRDS(paste0("correlate/meander_res_",region,".Rds"))
   meander_prep <- lapply(meander_res, list_prep)
   
   # Create the total 50th perc. MKE co-occurrence figure
-  cooc_50_total <- plot_res(filter(meander_prep$cooc_50, month == "total"), F,
+  cooc_50_total <- plot_res(filter(meander_prep$cooc_50),
                             "co-occurrence\nproportion", "cooc", coords)
   # cooc_50_total
   ggsave(cooc_50_total, filename = paste0("figures/",region,"_cooc_50_total.pdf"), 
