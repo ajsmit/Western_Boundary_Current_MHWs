@@ -746,10 +746,12 @@ list_prep <- function(df){
 
 # Create a single faceted plot
 # df <- filter(meander_prep$cooc_50)
-# scale_label <- "co-occurrence\nproportion"
+# df <- filter(meander_prep$corr_50)
 # scale_type <- "cooc"
+# scale_type <- "prop"
+# scale_type <- "cor"
 # coords <- coords
-plot_res <- function(df, scale_label, scale_type, coords){
+plot_res <- function(df, scale_type, coords){
   
   # Screen out desired data
   if(scale_type == "cooc"){
@@ -764,20 +766,34 @@ plot_res <- function(df, scale_label, scale_type, coords){
   
   # Create the base figure
   fig_res <- ggplot(df_prep, aes(x = lon, y = lat)) +
-    geom_tile(aes(fill = val), na.rm = T) +
+    geom_raster(aes(fill = val), na.rm = T) +
     borders(fill = "grey80", colour = "black") +
     coord_equal(xlim = c(coords[3:4]), ylim = c(coords[1:2])) +
     labs(x = NULL, y = NULL) +
     ggtitle(region) +
     # scale_fill_viridis_c(scale_label,  option = "A", na.value = NA) +
     # facet_wrap(~metric, ncol = 1) +
-    facet_wrap(~metric)
+    facet_wrap(~metric) +
+    theme(legend.position = c(0.7, 0.15),
+          legend.key.width = unit(2, units = "cm"))
   if(scale_type == "cooc"){
     # fig_scale <- fig_res + scale_fill_viridis_c(scale_label,  option = "A", na.value = NA)
-    fig_scale <- fig_res + scale_fill_gradientn("co-ocurrence", colors = viridis::viridis(n = 9, option = "A"), limits = c(0, 1))
-  } else {
-    fig_scale <- fig_res + scale_fill_gradient2(low = "blue", high = "red")
+    fig_scale <- fig_res + scale_fill_gradientn(guide = guide_colorbar(title = "Co-ocurrence",
+                                                                       direction = "horizontal",
+                                                                       title.position = "top"),
+                                                colors = viridis::viridis(n = 9, option = "A"), limits = c(0, 1))
+  } else if(scale_type == "prop"){
+    fig_scale <- fig_res + scale_fill_gradientn(guide = guide_colourbar(title = "Proportion",
+                                                                        direction = "horizontal",
+                                                                        title.position = "top"),
+                                                colors = viridis::viridis(n = 9, option = "B"), limits = c(0, 1))
+  }  else {
+    fig_scale <- fig_res + scale_fill_gradient2(guide = guide_colourbar(title = "Correlation (r)",
+                                                                        direction = "horizontal",
+                                                                        title.position = "top"),low = "blue", high = "red") +
+      theme(legend.position = "bottom")
   }
+  # fig_scale
   return(fig_scale)
 }
 
@@ -789,24 +805,27 @@ meander_vis <- function(region){
   if(coords[3] > 180) coords[3] <- coords[3]-360
   if(coords[4] > 180) coords[4] <- coords[4]-360
   fig_height <- length(seq(coords[1], coords[2], 1))/3
-  fig_width <- length(seq(coords[3], coords[4], 1))/5
+  fig_width <- length(seq(coords[3], coords[4], 1))/4
   
   # Prep the data
   meander_res <- readRDS(paste0("correlate/meander_res_",region,".Rds"))
   meander_prep <- lapply(meander_res, list_prep)
   
-  # Create the total 50th perc. MKE co-occurrence figure
-  cooc_50_total <- plot_res(filter(meander_prep$cooc_50),
-                            "co-occurrence\nproportion", "cooc", coords)
-  # cooc_50_total
-  ggsave(cooc_50_total, filename = paste0("figures/",region,"_cooc_50_total.pdf"), 
+  # Create the 50th perc. MKE co-occurrence and proportion figures
+  cooc_50 <- plot_res(meander_prep$cooc_50, "cooc", coords)
+  ggsave(cooc_50, filename = paste0("figures/",region,"_cooc_50.pdf"), 
+         width = fig_width, height = fig_height)
+  
+  prop_50 <- plot_res(meander_prep$cooc_50,"prop", coords)
+  ggsave(prop_50, filename = paste0("figures/",region,"_prop_50.pdf"), 
          width = fig_width, height = fig_height)
   
   # Create the total 90th perc. max int. co-occurrence figure
-  cooc_max_total <- plot_res(filter(meander_prep$cooc_max, month == "total"), F,
-                             "co-occurrence\nproportion", "cooc", coords)
-  # cooc_max_total
-  ggsave(cooc_max_total, filename = paste0("figures/",region,"_cooc_max_total.pdf"), 
+  cooc_max <- plot_res(meander_prep$cooc_max, "cooc", coords)
+  ggsave(cooc_max, filename = paste0("figures/",region,"_cooc_max.pdf"), 
+         width = fig_width, height = fig_height)
+  prop_max <- plot_res(meander_prep$cooc_max, "prop", coords)
+  ggsave(prop_max, filename = paste0("figures/",region,"_prop_max.pdf"), 
          width = fig_width, height = fig_height)
   
   # NB: There is no clear correlation pattern so I am not running the code below
@@ -843,3 +862,8 @@ meander_vis <- function(region){
   #        width = fig_width*1.5, height = fig_height*2)
 }
 
+# This function visualises the co-occurrence and proportion results
+# as histograms to give a more numeric representation of the results
+histogram_vis <- function(region){
+  
+}

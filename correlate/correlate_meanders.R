@@ -140,13 +140,13 @@ doMC::registerDoMC(cores = 50)
 doMC::registerDoMC(cores = 50)
 
 # Calculate the results in serial
-for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
-  region <- colnames(bbox)[i]
-  print(paste0("Began run on ",region," at ",Sys.time()))
-  meander_co_calc(region)
-  print(paste0("Finished run on ",region," at ",Sys.time()))
-  gc()
-} # ~30 seconds each
+# for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
+#   region <- colnames(bbox)[i]
+#   print(paste0("Began run on ",region," at ",Sys.time()))
+#   meander_co_calc(region)
+#   print(paste0("Finished run on ",region," at ",Sys.time()))
+#   gc()
+# } # ~15 minutes each
 
 
 # Visualise results -------------------------------------------------------
@@ -169,25 +169,38 @@ for(i in 1:(ncol(bbox)-1)){ # Not running for Benguela
 # max means that only pixels that have had events whose max intensity is in
 # the 90th percentile for the study region are being shown
 
-# timeUnit: This shows if the figure is showing the "total" number of days
-# or if it is showing "month" facets.
 # Because there was no apparent monthly pattern I didn't save all of the 
 # figures as I didn't want to create too much clutter
+
 # The code to create them exists in "meander_vis()" in "setup/meanderFunctions.R"
 # and must just be uncommented to run
 
-# Within each figure are two panels labeled "cooc_90" and "cooc_flat"
-# cooc_flat shows the co-occurrence rates for days with MHWs against 
-# all days (~9000) in a given pixel. Generally this is around 1 - 3%
-# cooc_90 shows the rates of co-occurrence between MHW days and days when
-# the MKE is in the 90th percentile for the entire study area. These rates
-# tend to be much higher, some of them are even 1.0
+### Within each figure are many panels, the following is an explanation of them:
+## Co-occurrence figures
+# cooc_90: The proportion of days when the pixel had a value at or above the 90th perc.
+  # MKE for the study area while a MHW was also occurring
+  # These rates tend to be much higher, some are aproaching 1.0 (i.e. 100% MHW co-occurrence)
+# cooc_anticyclone: When the pixel had an anticyclone and a MHW at the same time
+# cooc_base: All days of observation and the rate at which MHWs were also occurring
+  # This is the base-line for MHW occurrence and is usually around 10% as expected
+# cooc_cyclone: When the pixel had a cyclone and a MHW at the same time
+# cooc_eddy: All days when eddies of any sort were present along with a MHW
+  # This is generally less than either of the anti/cyclone values
+  # Meaning that depending on the hemisphere the type of eddy matters for heat transport
+  # i.e. cold or warm cores
+# cooc_no_eddy: Days when no eddies are present and also a MHW is occurring
+  # This tends to be similar to cooc_base
+# cooc_no_eddy_90: When a pixels MKE is in the 90th perc. when there is a MHW but no eddy present
+  # This is the target result and the main hypothesis test
+  # Doesn't look much different than cooc_90
+## Proportion figures
+# prop_90
 
-# A for loop for ease of creating all desired figures
+# A for loop for ease of creating all desired map figures
 # for(i in 1:(ncol(bbox)-1)){
 #   region <- colnames(bbox)[i]
 #   print(paste0("Began run on ",region," at ",Sys.time()))
-#   meander_vis(region)
+  # meander_vis(region)
 #   print(paste0("Finished run on ",region," at ",Sys.time()))
 #   gc()
 # } # ~1 second each
