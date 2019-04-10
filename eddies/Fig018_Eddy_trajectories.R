@@ -61,10 +61,9 @@ EAC.ev <- c("2005-10-21", "2005-11-20", "2000-12-04", "2000-12-26", "2017-01-07"
 GS.ev <- c("2014-03-01", "2014-04-2", "2014-11-23", "2015-02-24", "2018-03-05", "2018-05-02")
 KC.ev <- c("2013-03-31", "2013-05-05", "2007-06-04", "2007-06-15", "2013-09-09", "2013-09-15")
 
-region <- "AC"
-plot.parameters <- AC.layers
-ev.date <- AC.ev
-
+# region <- "AC"
+# plot.parameters <- AC.layers
+# ev.date <- AC.ev
 
 eddy_plot <- function(eddies, region, plot.parameters, ev.date) {
   # bathy data
@@ -83,9 +82,24 @@ eddy_plot <- function(eddies, region, plot.parameters, ev.date) {
     dplyr::mutate(bin = bin(duration, method = "content"))
 
   # find eddies that start in the WBCs
-  pts <- fread(paste0("masks/", region, "-MKE_pts.csv"))
+  load(paste0("masks/", region, "-mask_points.Rdata"))
 
-  tracks <- dplyr::right_join(eddies, pts) %>%
+  stations_subset <- stations[zones, ]
+
+  # points
+  mask.pts$mke.pt
+
+  # polys
+  mask.list$mke90
+  class(mask.list$int90)
+
+  # eddies
+  eddies
+  eddies.pts <- SpatialPoints(eddies[, c(1,2)])
+
+  over(mask.pts$mke.pt, mask.list$mke90)
+
+  tracks <- dplyr::right_join(eddies, mask.pts$mke.pt) %>%
     dplyr::filter(observation_number == 0) %>%
     dplyr::select(track)
 
@@ -102,7 +116,7 @@ eddy_plot <- function(eddies, region, plot.parameters, ev.date) {
 
   ev_eddies <- dplyr::right_join(WBC_eddies, WBC_eddies_ev)
 
-  load(paste0("/Users/ajsmit/Dropbox/R/WBCs/masks/", region, "-masks.RData"))
+  load(paste0("/Users/ajsmit/Dropbox/R/WBCs/masks/", region, "-mask_polys.RData"))
   mke <- fortify(mask.list$mke90)
 
   eddy_plt <- ggplot(data = WBC_eddies, aes(x = lon, y = lat)) +
@@ -119,6 +133,9 @@ eddy_plot <- function(eddies, region, plot.parameters, ev.date) {
            colour = "none") +
     theme_map() +
     plot.parameters
+
+  ggplot2::ggsave("eddies/Fig018_Eddy_trajectories_AC.jpg",
+                  width = 3.5 * (1/3), height = 2.6 * (1/3), scale = 3.7)
 
   return(eddy_plt)
 }

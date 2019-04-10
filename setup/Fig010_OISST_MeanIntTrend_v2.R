@@ -49,9 +49,6 @@ GS_annualMeanIntTrend <- ddply(GS_annualMeanInt, .(lon, lat), linFun, poissan = 
 
 # Make a function to create the basic plot components ---------------------
 
-# read in the region-specific components
-source("setup/plot.layers.R")
-
 gv.plot <- function(data, plot.parameters, bathy, region) {
 
   bathyDir <- "/Users/ajsmit/spatial/GEBCO_2014_Grid/csv"

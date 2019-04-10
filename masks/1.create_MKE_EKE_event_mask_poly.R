@@ -1,14 +1,19 @@
 # Calculate the mean (long-term) MKE, EKE and mean intensity for masking
 
+library(tidyverse)
 library(data.table)
 library(raster)
 library(sf)
 library(smoothr)
-library(tidyverse)
 library(ncdf4)
 library(RcppRoll)
 library(ggpubr)
-library(doMC); doMC::registerDoMC(cores = 4)
+library(rgeos)
+library(doMC); doMC::registerDoMC(cores = 3)
+
+source("setup/plot.layers.R")
+
+region <- "EAC"
 
 mask.fun <- function(region) {
   # Read in the Aviso data
@@ -133,10 +138,10 @@ poly.plot <- function(region, plot.parameters) {
   eke75 <- fortify(mask.list$eke75)
   int75 <- fortify(mask.list$int75)
   plt90 <- ggplot() +
-    geom_polygon(data = mke90, aes(long, lat, group = group),
-                 fill = alpha("gray50", 0.5), colour = "red3", size = 0.3) +
     geom_polygon(data = int90, aes(long, lat, group = group),
                  fill = alpha("#c83c7e", 1.0), colour = NA) +
+    geom_polygon(data = mke90, aes(long, lat, group = group),
+                 fill = alpha("gray50", 0.5), colour = "red3", size = 0.3) +
     # geom_polygon(data = eke75, aes(long, lat, group = group),
     #              fill = alpha("gray50", 0.5), colour = "navy", size = 0.3,
     #              linetype = "dashed") +

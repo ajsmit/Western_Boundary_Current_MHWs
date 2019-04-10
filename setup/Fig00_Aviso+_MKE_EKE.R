@@ -2,12 +2,13 @@
 
 library(tidyverse)
 library(RcppRoll)
+library(ncdf4)
 library(lubridate)
 library(data.table)
 library(colorspace)
 library(scales)
 library(ggpubr)
-library(doMC); doMC::registerDoMC(cores = 4)
+library(doMC); doMC::registerDoMC(cores = 3)
 
 # Functions: velocities, EKE, etc.
 source("setup/functions.R")
@@ -89,7 +90,7 @@ load(paste0(keDir, "/", "GS_ke_v3.RData"))
 
 # Agulhas Current ---------------------------------------------------------
 
-load("/Users/ajsmit/Dropbox/R/WBCs/masks/AC-masks.RData")
+load("/Users/ajsmit/Dropbox/R/WBCs/masks/AC-mask_polys.RData")
 mke <- fortify(mask.list$mke90)
 eke <- fortify(mask.list$eke90)
 int <- fortify(mask.list$int90)
@@ -138,7 +139,7 @@ AC.Fig00b <- ggplot(AC.dat, aes(x = lon, y = lat)) +
 
 # Brazil Current ----------------------------------------------------------
 
-load("/Users/ajsmit/Dropbox/R/WBCs/masks/BC-masks.RData")
+load("/Users/ajsmit/Dropbox/R/WBCs/masks/BC-mask_polys.RData")
 mke <- fortify(mask.list$mke90)
 eke <- fortify(mask.list$eke90)
 int <- fortify(mask.list$int90)
@@ -187,7 +188,7 @@ BC.Fig00b <- ggplot(BC.dat, aes(x = lon, y = lat)) +
 
 # East Australian Current -------------------------------------------------
 
-load("/Users/ajsmit/Dropbox/R/WBCs/masks/EAC-masks.RData")
+load("/Users/ajsmit/Dropbox/R/WBCs/masks/EAC-mask_polys.RData")
 mke <- fortify(mask.list$mke90)
 eke <- fortify(mask.list$eke90)
 int <- fortify(mask.list$int90)
@@ -236,7 +237,7 @@ EAC.Fig00b <- ggplot(EAC.dat, aes(x = lon, y = lat)) +
 
 # Gulf Stream -------------------------------------------------------------
 
-load("/Users/ajsmit/Dropbox/R/WBCs/masks/GS-masks.RData")
+load("/Users/ajsmit/Dropbox/R/WBCs/masks/GS-mask_polys.RData")
 mke <- fortify(mask.list$mke90)
 eke <- fortify(mask.list$eke90)
 int <- fortify(mask.list$int90)
@@ -285,7 +286,7 @@ GS.Fig00b <- ggplot(GS.dat, aes(x = lon, y = lat)) +
 
 # Kuroshio Current --------------------------------------------------------
 
-load("/Users/ajsmit/Dropbox/R/WBCs/masks/KC-masks.RData")
+load("/Users/ajsmit/Dropbox/R/WBCs/masks/KC-mask_polys.RData")
 mke <- fortify(mask.list$mke90)
 eke <- fortify(mask.list$eke90)
 int <- fortify(mask.list$int90)
@@ -336,7 +337,7 @@ Fig00.mke <- ggarrange(AC.Fig00a,
                        EAC.Fig00a,
                        GS.Fig00a,
                        KC.Fig00a,
-                       ncol = 1, nrow = 5, labels = list("a", "e", "i", "m", "q"))
+                       ncol = 1, nrow = 5, labels = "AUTO")
 ggplot2::ggsave("publ_plots/Fig00_Aviso+_MKE.jpg",
                 width = 3.5 * (1/3), height = 13 * (1/3), scale = 3.7)
 
@@ -345,6 +346,6 @@ Fig00.eke <- ggarrange(AC.Fig00b,
                        EAC.Fig00b,
                        GS.Fig00b,
                        KC.Fig00b,
-                       ncol = 1, nrow = 5, labels = list("b", "f", "j", "n", "r"))
+                       ncol = 1, nrow = 5, labels = "AUTO")
 ggplot2::ggsave("publ_plots/Fig00_Aviso+_EKE.jpg",
                 width = 3.5 * (1/3), height = 13 * (1/3), scale = 3.7)
