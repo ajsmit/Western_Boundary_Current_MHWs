@@ -695,10 +695,6 @@ meander_co_calc <- function(region){
 
 # Visualise results -------------------------------------------------------
 
-# testers...
-# region <- "AC"
-# df <- meander_res$cooc_50
-
 # Quick list capable prep function for plotting consistency
 list_prep <- function(df){
   # if("cooc_flat" %in% colnames(df)){
@@ -796,11 +792,35 @@ ridge_res <- function(df, region, scale_type){
   } else {
     df_prep <- df
   }
+  
+  
   ggplot(df_prep, aes(x = val, y = metric)) +
-    ggridges::geom_density_ridges() +
+    stat_density_ridges(aes(fill = factor(..quantile..)),
+                        geom = "density_ridges_gradient", calc_ecdf = TRUE,
+                        quantiles = 4, quantile_lines = TRUE) +
+    viridis::scale_fill_viridis(discrete = TRUE, name = "Quartiles", alpha = 0.7) +
     ggtitle(region) +
     labs(y = NULL, x = scale_type) +
     scale_x_continuous(limits = c(0, 1))
+  
+  # ggplot(df_prep, aes(x = val, y = metric)) +
+  #   geom_density_ridges(
+  #     jittered_points = TRUE,
+  #     position = position_points_jitter(width = 0, height = 0),
+  #     point_shape = "|", point_size = 2, point_alpha = 0.7, alpha = 0) +
+  #   stat_density_ridges(aes(fill = factor(..quantile..)),
+  #                       geom = "density_ridges_gradient", calc_ecdf = TRUE, quantiles = c(0.025, 0.975)) +
+  #   scale_fill_manual(name = "Probability", values = c("#FF0000A0", "#A0A0A0A0", "#0000FFA0"),
+  #                     labels = c("(0, 0.025]", "(0.025, 0.975]", "(0.975, 1]")) +
+  #   ggtitle(region) +
+  #   labs(y = NULL, x = scale_type) +
+  #   scale_x_continuous(limits = c(0, 1))
+    
+  # ggplot(df_prep, aes(x = val, y = metric)) +
+  #   ggridges::geom_density_ridges() +
+  #   ggtitle(region) +
+  #   labs(y = NULL, x = scale_type) +
+  #   scale_x_continuous(limits = c(0, 1))
     # facet_wrap(~metric)
 }
 
