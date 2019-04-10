@@ -4,11 +4,13 @@
 # Load libraries ----------------------------------------------------------
 
 library(tidyverse)
+library(maps)
 # library(furrr)
 # library(multidplyr, lib.loc = "../R-packages/")
 library(ncdf4)
 library(RcppRoll)
 library(data.table)
+library(ggridges)
 doMC::registerDoMC(cores = 50)
 # tikoraluk_cluster <- multidplyr::create_cluster(50)
 # future::plan(multiprocess)
@@ -414,105 +416,91 @@ eddy_masks <- function(){
 
 # Mask AVISO and MHW data -------------------------------------------------
 
-# testers...
-# region <- "EAC"
-# df <- AVISO_KE
-# mask_sub <- masks$mke_50
-# AVISO <- AVISO_KE
-# MHW <- MHW_50
-
-# This function is designed to be passed ddply data grouped by c("lon", "lat")
-MHW_clim_sub <- function(df, mask_sub){
-  
-  # Create coordinate indexes
-  mask_sub$coord_index <- paste0(mask_sub$lon, mask_sub$lat)
-  df$coord_index <- paste0(df$lon, df$lat)
-  
-  # Filter by event column if the data are within the mask
-  if(df$coord_index %in% mask_sub$coord_index){
-    res <- df %>% 
-      select(-coord_index) %>% 
-      filter(event == TRUE) %>%
-      mutate(intensity = temp-thresh)
-    return(res)
-  }
-}
-
-# This function is designed to be passed ddply data grouped by c("lon", "lat")
-AVISO_KE_sub <- function(AVISO, mask_sub){
-  
-  # Create coordinate indexes
-  mask_sub$coord_index <- paste0(mask_sub$lon, mask_sub$lat)
-  AVISO$coord_index <- paste0(AVISO$lon, AVISO$lat)
-  
-  # Filter and join as required
-  if(AVISO$coord_index %in% mask_sub$coord_index){
-    res <- AVISO
-  return(res)
-  }
-}
+# Wrapper function for screening out pixels within an eddy masks
+# This function is designed to be fed a dataframe already grouped by date with plyr::ddply
+# df <- AVISO_MHW_50 %>%
+# filter(t == "1995-01-01")
+# eddy_mask <- eddy_masks_region
+# merge_eddy <- function(df, eddy_mask){
+#   
+#   # Filter only the one date used for the calculation
+#   # Also filter out pixels with multiple eddies present
+#   # selecting for the largest of the eddies
+#   eddy_mask_sub <- filter(eddy_mask, time == as.character(df$t[1])) %>% 
+#     unite(lon_mask, lat_mask, col = "coord_index", sep = "", remove = F) %>% 
+#     dplyr::rename(lon_eddy = lon, lat_eddy = lat) %>% 
+#     group_by(coord_index) %>% 
+#     filter(speed_radius == max(speed_radius, na.rm = T))
+#   
+#   # Combine and exit
+#   res <- df %>% 
+#     left_join(eddy_mask_sub, by = "coord_index") %>% 
+#     mutate_if(is.numeric, round, 3)
+#   return(res)
+# }
 
 # Create the masked dataframes
+# region <- "BC"
 mask_region <- function(region){
   
-  # Load AVISO, MHW, and masks
-  AVISO_KE <- fread(paste0("../data/WBC/AVISO_KE_",region,".csv"), nThread = 10)
-  MHW_clim <- fread(paste0("../data/WBC/MHW_clim_",region,".csv"), nThread = 10)
-  masks <- readRDS(paste0("masks/masks_",region,".Rds"))
+  # Load AVISO, MHW, and MKE masks
+  AVISO_KE <- fread(paste0("~/data/WBC/AVISO_KE_",region,".csv"), nThread = 30) %>%
+    mutate_if(is.numeric, round, 3)
+  AVISO_eddy <- fread(paste0("~/data/WBC/AVISO_eddy_mask_",region,".csv"), nThread = 30) %>% 
+    # unite(lon_mask, lat_mask, col = "coord_index", sep = "", remove = F) %>% 
+    dplyr::rename(lon_eddy = lon, lat_eddy = lat,
+                  lon = lon_mask, lat = lat_mask,
+                  t = time) %>%
+    mutate(lon = ifelse(lon < 0, lon+360, lon),
+           lon_eddy = ifelse(lon_eddy < 0, lon_eddy+360, lon_eddy)) %>% 
+    mutate_if(is.numeric, round, 3)
+  MHW_clim <- fread(paste0("~/data/WBC/MHW_clim_",region,".csv"), nThread = 30) %>%
+    filter(event == TRUE) %>%
+    mutate(intensity = temp-thresh) %>%
+    mutate_if(is.numeric, round, 3)
+  mke_masks <- readRDS(paste0("masks/masks_",region,".Rds"))
   
   # First mask the MHW data as these will be left_join() to AVISO data
   print("Filtering MHW data")
-  MHW_50 <- plyr::ddply(MHW_clim, .variables = c("lon", "lat"), 
-                        .fun = MHW_clim_sub, .parallel = T, mask_sub = masks$mke_50)
-  MHW_max <- plyr::ddply(MHW_clim, .variables = c("lon", "lat"), 
-                         .fun = MHW_clim_sub, .parallel = T, mask_sub = masks$max_90)
+  MHW_50 <- left_join(mke_masks$mke_50[,c("lon", "lat")], MHW_clim, by = c("lon", "lat"))
+  MHW_max <- left_join(mke_masks$max_90[,c("lon", "lat")], MHW_clim, by = c("lon", "lat"))
   rm(MHW_clim); gc()
   
   # Then mask the AVISO data
   print("Filtering AVISO data")
-  AVISO_50 <- plyr::ddply(AVISO_KE, .variables = c("lon", "lat"), 
-                          .fun = AVISO_KE_sub, .parallel = T, mask_sub = masks$mke_50)
-  AVISO_max <- plyr::ddply(AVISO_KE, .variables = c("lon", "lat"), 
-                           .fun = AVISO_KE_sub, .parallel = T, mask_sub = masks$max_90)
+  AVISO_50 <- left_join(mke_masks$mke_50[,c("lon", "lat")], AVISO_KE, by = c("lon", "lat"))
+  AVISO_max <- left_join(mke_masks$max_90[,c("lon", "lat")], AVISO_KE, by = c("lon", "lat"))
   rm(AVISO_KE); gc()
   
-  # Join and save
-  print("Joining data")
+  # Join MHW and AVISO data
+  print("Joining AVISO and MHW data")
   AVISO_MHW_50 <- left_join(AVISO_50, MHW_50, by = c("lon", "lat", "t"))
-  fwrite(AVISO_MHW_50, file = paste0("../data/WBC/AVISO_MHW_50_",region,".csv"), nThread = 10)
   AVISO_MHW_max <- left_join(AVISO_max, MHW_max, by = c("lon", "lat", "t"))
-  fwrite(AVISO_MHW_max, file = paste0("../data/WBC/AVISO_MHW_max_",region,".csv"), nThread = 10)
+  rm(AVISO_50, MHW_50, AVISO_max, MHW_max); gc()
+  
+  # Then mask the eddy data
+  print("Joining eddy data")
+  AVISO_MHW_eddy_50 <- left_join(AVISO_MHW_50, AVISO_eddy, by = c("lon", "lat", "t")) #%>% 
+    # group_by(lon, lat, t) %>% 
+    # NB: Filter out pixels with multiple eddies present
+      # selecting for the largest of the eddies
+  # Not currently doing this as it is too slow and not terribly important
+    # filter(speed_radius == max(speed_radius, na.rm = T)) %>% 
+    # ungroup()
+  AVISO_MHW_eddy_max <- left_join(AVISO_MHW_max, AVISO_eddy, by = c("lon", "lat", "t")) #%>% 
+    # group_by(lon, lat, t) %>% 
+    # filter(speed_radius == max(speed_radius, na.rm = T)) %>% 
+    # ungroup()
   rm(AVISO_MHW_50, AVISO_MHW_max); gc()
+  
+  # Save and clean up
+  fwrite(AVISO_MHW_eddy_50, file = paste0("~/data/WBC/AVISO_MHW_eddy_50_",region,".csv"), nThread = 10)
+  fwrite(AVISO_MHW_eddy_max, file = paste0("~/data/WBC/AVISO_MHW_eddy_max_",region,".csv"), nThread = 10)
+  rm(AVISO_MHW_eddy_50, AVISO_MHW_eddy_max); gc()
 }
 
 
 # Calculate cooccurrence and correlation ----------------------------------
-
-# testers...
-# region <- "EAC"
-
-# Wrapper function for screening out pixels within an eddy masks
-# This function is designed to be fed a dataframe already group by date with plyr::ddply
-# df <- AVISO_MHW_50 %>%
-  # filter(t == "1995-01-01")
-# eddy_mask <- eddy_masks_region
-merge_eddy <- function(df, eddy_mask){
-  
-  # Filter only the one date used for the calculation
-  # Also filter out pixels with multiple eddies present
-    # selecting for the largest of the eddies
-  eddy_mask_sub <- filter(eddy_mask, time == as.character(df$t[1])) %>% 
-    unite(lon_mask, lat_mask, col = "coord_index", sep = "", remove = F) %>% 
-    dplyr::rename(lon_eddy = lon, lat_eddy = lat) %>% 
-    group_by(coord_index) %>% 
-    filter(speed_radius == max(speed_radius, na.rm = T))
-  
-  # Combine and exit
-  res <- df %>% 
-    left_join(eddy_mask_sub, by = "coord_index") %>% 
-    mutate_if(is.numeric, round, 3)
-  return(res)
-}
 
 # Wrapper function for screening out multiple things
 # testers...
@@ -645,7 +633,7 @@ cooc_90 <- function(df){
 # Wrapper function for calculating correlations between metrics
 corr_calc <- function(df){
   
-  # Calculate crrelations by month
+  # Calculate correlations by month
   # res_month <- df %>% 
   #   mutate(month = as.character(lubridate::month(t, label = T))) %>% 
   #   group_by(lon, lat, month) %>% 
@@ -668,30 +656,20 @@ corr_calc <- function(df){
 
 # Run all the calculations etc.
 # testers...
-# region <- "AC"
+# region <- "BC"
 meander_co_calc <- function(region){
   
   # Load masked AVISO and MHW data as well as masks
-  AVISO_MHW_50 <- fread(paste0("../data/WBC/AVISO_MHW_50_",region,".csv"), nThread = 10)
-  AVISO_MHW_max <- fread(paste0("../data/WBC/AVISO_MHW_max_",region,".csv"), nThread = 10)
+  AVISO_MHW_eddy_50 <- fread(paste0("../data/WBC/AVISO_MHW_eddy_50_",region,".csv"), nThread = 30)
+  AVISO_MHW_eddy_max <- fread(paste0("../data/WBC/AVISO_MHW_eddy_max_",region,".csv"), nThread = 30)
   mke_masks_region <- readRDS(paste0("masks/masks_",region,".Rds"))
-  eddy_masks_region <- fread(paste0("~/data/WBC/AVISO_eddy_mask_",region,".csv"), nThread = 10)
-  
-  # Merge eddy masks into data
-  print("Merging eddy masks")
-  # NB: 50 cores uses too much RAM
-  doMC::registerDoMC(cores = 30)
-  eddy_merge_50 <- plyr::ddply(AVISO_MHW_50, .variables = "t", .fun = merge_eddy,
-                               eddy_mask = eddy_masks_region, .parallel = T)
-  eddy_merge_max <- plyr::ddply(AVISO_MHW_max, .variables = "t", .fun = merge_eddy,
-                                eddy_mask = eddy_masks_region, .parallel = T)
   
   # Prep the data for further calculations
   # Screen out days when MKE below 90th perc. and days with no MHWs
   # Also screen days with/out eddies present
   print("Screening by MKE and eddies")
-  count_50 <- count_mke_eddy(eddy_merge_50, mke_masks_region$mke_90$mke_90[1])
-  count_max <- count_mke_eddy(eddy_merge_max, mke_masks_region$mke_90$mke_90[1])
+  count_50 <- count_mke_eddy(AVISO_MHW_eddy_50, mke_masks_region$mke_90$mke_90[1])
+  count_max <- count_mke_eddy(AVISO_MHW_eddy_max, mke_masks_region$mke_90$mke_90[1])
   
   # Calculate rates of co-occurrence between types of days and MHWs
   print("Calculating co-occurrence")
@@ -700,8 +678,8 @@ meander_co_calc <- function(region){
   
   # Calculate correlations
   print("Calculating correlations")
-  corr_50 <- corr_calc(eddy_merge_50)
-  corr_max <- corr_calc(eddy_merge_max)
+  corr_50 <- corr_calc(AVISO_MHW_eddy_50)
+  corr_max <- corr_calc(AVISO_MHW_eddy_max)
 
   # Merge, save, and clean up
   meander_res <- list(cooc_50 = cooc_50,
@@ -739,8 +717,7 @@ list_prep <- function(df){
   # res$month[is.na(res$month)] <- "total"
   res <- res %>% 
     ungroup() %>% 
-    mutate(lon = ifelse(lon > 180, lon-360, lon),
-           lat = ifelse(lat > 180, lat-360, lat))
+    mutate(lon = ifelse(lon > 180, lon-360, lon))
   return(res)
 }
 
@@ -751,7 +728,7 @@ list_prep <- function(df){
 # scale_type <- "prop"
 # scale_type <- "cor"
 # coords <- coords
-plot_res <- function(df, scale_type, coords){
+plot_res <- function(df, region, scale_type, coords){
   
   # Screen out desired data
   if(scale_type == "cooc"){
@@ -775,29 +752,61 @@ plot_res <- function(df, scale_type, coords){
     # facet_wrap(~metric, ncol = 1) +
     facet_wrap(~metric) +
     theme(legend.position = c(0.7, 0.15),
-          legend.key.width = unit(2, units = "cm"))
+          legend.key.width = unit(((coords[2]-coords[1])/30), units = "cm"))
   if(scale_type == "cooc"){
     # fig_scale <- fig_res + scale_fill_viridis_c(scale_label,  option = "A", na.value = NA)
-    fig_scale <- fig_res + scale_fill_gradientn(guide = guide_colorbar(title = "Co-ocurrence",
-                                                                       direction = "horizontal",
-                                                                       title.position = "top"),
-                                                colors = viridis::viridis(n = 9, option = "A"), limits = c(0, 1))
+    fig_scale <- fig_res + 
+      scale_fill_gradientn(guide = guide_colorbar(title = "Co-ocurrence",
+                                                  direction = "horizontal",
+                                                  title.position = "top"),
+                           colors = viridis::viridis(n = 9, option = "A"), limits = c(0, 1))
   } else if(scale_type == "prop"){
-    fig_scale <- fig_res + scale_fill_gradientn(guide = guide_colourbar(title = "Proportion",
-                                                                        direction = "horizontal",
-                                                                        title.position = "top"),
-                                                colors = viridis::viridis(n = 9, option = "B"), limits = c(0, 1))
+    fig_scale <- fig_res + 
+      scale_fill_gradientn(guide = guide_colourbar(title = "Proportion",
+                                                   direction = "horizontal",
+                                                   title.position = "top"),
+                           colors = viridis::viridis(n = 9, option = "B"), limits = c(0, 1))
   }  else {
-    fig_scale <- fig_res + scale_fill_gradient2(guide = guide_colourbar(title = "Correlation (r)",
-                                                                        direction = "horizontal",
-                                                                        title.position = "top"),low = "blue", high = "red") +
+    fig_scale <- fig_res + 
+      scale_fill_gradient2(guide = guide_colourbar(title = "Correlation (r)",
+                                                   direction = "horizontal",
+                                                   title.position = "top"),low = "blue", high = "red") +
       theme(legend.position = "bottom")
   }
   # fig_scale
   return(fig_scale)
 }
 
+# This function visualises the co-occurrence and proportion results
+# as ridgeplots to give a more numeric representation of the results
+# df <- filter(meander_prep$cooc_50)
+# df <- filter(meander_prep$corr_50)
+# scale_type <- "cooc"
+# scale_type <- "prop"
+# scale_type <- "cor"
+# region <- "BC"
+ridge_res <- function(df, region, scale_type){
+  # Screen out desired data
+  if(scale_type == "cooc"){
+    df_prep <- df %>%
+      filter(!grepl("prop", metric))
+  } else if(scale_type == "prop") {
+    df_prep <- df %>%
+      filter(!grepl("cooc", metric))
+  } else {
+    df_prep <- df
+  }
+  ggplot(df_prep, aes(x = val, y = metric)) +
+    ggridges::geom_density_ridges() +
+    ggtitle(region) +
+    labs(y = NULL, x = scale_type) +
+    scale_x_continuous(limits = c(0, 1))
+    # facet_wrap(~metric)
+}
+
+
 # This function creates all of the current visual outputs
+# region <- "BC"
 meander_vis <- function(region){
   
   # Determine coordinates and figure dimensions
@@ -812,21 +821,32 @@ meander_vis <- function(region){
   meander_prep <- lapply(meander_res, list_prep)
   
   # Create the 50th perc. MKE co-occurrence and proportion figures
-  cooc_50 <- plot_res(meander_prep$cooc_50, "cooc", coords)
+  cooc_50 <- plot_res(meander_prep$cooc_50, region, "cooc", coords)
   ggsave(cooc_50, filename = paste0("figures/",region,"_cooc_50.pdf"), 
          width = fig_width, height = fig_height)
-  
-  prop_50 <- plot_res(meander_prep$cooc_50,"prop", coords)
+  cooc_50_ridge <- ridge_res(meander_prep$cooc_50, region, "cooc")
+  ggsave(cooc_50_ridge, filename = paste0("figures/",region,"_cooc_50_ridge.pdf"), 
+         width = 6, height = 6)
+  prop_50 <- plot_res(meander_prep$cooc_50, region, "prop", coords)
   ggsave(prop_50, filename = paste0("figures/",region,"_prop_50.pdf"), 
          width = fig_width, height = fig_height)
+  prop_50_ridge <- ridge_res(meander_prep$cooc_50, region, "prop")
+  ggsave(prop_50_ridge, filename = paste0("figures/",region,"_prop_50_ridge.pdf"), 
+         width = 6, height = 6)
   
   # Create the total 90th perc. max int. co-occurrence figure
-  cooc_max <- plot_res(meander_prep$cooc_max, "cooc", coords)
+  cooc_max <- plot_res(meander_prep$cooc_max, region, "cooc", coords)
   ggsave(cooc_max, filename = paste0("figures/",region,"_cooc_max.pdf"), 
          width = fig_width, height = fig_height)
-  prop_max <- plot_res(meander_prep$cooc_max, "prop", coords)
+  cooc_max_ridge <- ridge_res(meander_prep$cooc_max, region, "cooc")
+  ggsave(cooc_max_ridge, filename = paste0("figures/",region,"_cooc_max_ridge.pdf"), 
+         width = 6, height = 6)
+  prop_max <- plot_res(meander_prep$cooc_max, region, "prop", coords)
   ggsave(prop_max, filename = paste0("figures/",region,"_prop_max.pdf"), 
          width = fig_width, height = fig_height)
+  prop_max_ridge <- ridge_res(meander_prep$cooc_max, region, "prop")
+  ggsave(prop_max_ridge, filename = paste0("figures/",region,"_prop_max_ridge.pdf"), 
+         width = 6, height = 6)
   
   # NB: There is no clear correlation pattern so I am not running the code below
   # They will run if they are uncommented
@@ -862,8 +882,3 @@ meander_vis <- function(region){
   #        width = fig_width*1.5, height = fig_height*2)
 }
 
-# This function visualises the co-occurrence and proportion results
-# as histograms to give a more numeric representation of the results
-histogram_vis <- function(region){
-  
-}
