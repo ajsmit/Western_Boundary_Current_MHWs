@@ -1,20 +1,24 @@
 # The purpose of this script is to first create the AVISO and MHW databases
-# used throughout this analysis because this script is to be run on the 
+# used throughout this analysis because this script is to be run on the
 # tikoraluk server and the database files are too large to send via
 # conventional digital means
 # These files are created here by:
   # 1) Loading the bounding box definitions
   # 2) Subsetting from the MHW and AVISO databases on tikoraluk
-    # 2.1) The grids for these data already match on tikoraluk 
+    # 2.1) The grids for these data already match on tikoraluk
       # so no converting is required
 
 # With these databases recreated here, the next step is to re-calculate KE
 
 # Then the eddy trajectory product from AVISO is used to create an eddy mask
+#
+# AJS: How? Why?
 
 # With all of the results ready, the next step is to use the 90th perc.
-# MKE mask and the 50th perc. MKE mask to define the region within which 
+# MKE mask and the 50th perc. MKE mask to define the region within which
 # we want to compare MKE and MHW intensity
+#
+# AJS: Why a 50the perc MKE mask?
 
 # We then mask these results with the eddy trajectory mask
 
@@ -36,15 +40,15 @@ doMC::registerDoMC(cores = 50)
 
 # Run sequentially
 # for(i in 1:(ncol(bbox)-1)){
-# 
+#
 #   # Determine region
 #   region <- colnames(bbox)[i]
 #   print(paste0("Began run on ",region," at ",Sys.time()))
-# 
+#
 #   # Create the masks
 #   AVISO_KE_save(colnames(bbox)[i])
 #   print(paste0("Finished run on ",region," at ",Sys.time()))
-# 
+#
 #   # Clear up some RAM
 #   gc()
 # } # ~ 13 minute each
@@ -72,20 +76,20 @@ doMC::registerDoMC(cores = 50)
 
 # Run sequentially
 # for(i in 1:(ncol(bbox)-1)){
-# 
+#
 #   # Determine region
 #   region <- colnames(bbox)[i]
 #   print(paste0("Began run on ",region," at ",Sys.time()))
-# 
+#
 #   # Load the desired files
 #   AVISO_KE <- fread(paste0("../data/WBC/AVISO_KE_",region,".csv"))
 #   MHW_event <- fread(paste0("../data/WBC/MHW_event_",region,".csv"))
 #   print("Data loaded")
-# 
+#
 #   # Create the masks
 #   mke_masks(AVISO = AVISO_KE, MHW = MHW_event)
 #   print(paste0("Finished run on ",region," at ",Sys.time()))
-# 
+#
 #   # Clear up some RAM
 #   rm(AVISO_KE, MHW_event); gc()
 # } # ~ 1 minute each
@@ -102,7 +106,7 @@ doMC::registerDoMC(cores = 50)
 
 # Mask regions ------------------------------------------------------------
 
-# In this step we take only the MKE and MHW pixels that are in the 
+# In this step we take only the MKE and MHW pixels that are in the
 # 50th percentile mask but not in the 90th percentile mask.
 # We also take the pixels that are in the 90th percentile max intensity mask.
 # In the process of screening out these pixels we also combine all KE, eddy, and MHW data
@@ -111,16 +115,16 @@ doMC::registerDoMC(cores = 50)
 
 # Run sequentially
 # for(i in 1:(ncol(bbox)-1)){
-# 
+#
 #   # Determine region
 #   region <- colnames(bbox)[i]
 #   print(paste0("Began run on ",region," at ",Sys.time()))
-# 
+#
 #   # Mask the regions
 #      # NB: This runs the MKE and Eddy masks
 #   mask_region(region)
 #   print(paste0("Finished run on ",region," at ",Sys.time()))
-# 
+#
 #   # Clear up some RAM
 #   gc()
 # } # ~ 12 minutes each
@@ -132,7 +136,7 @@ doMC::registerDoMC(cores = 50)
 # areas are themselves in the 90th percentile for MKE.
 # A count of how often this occurs when MHWs are occurring is made to find
 # what the proportion of this occurence is.
-# The MKE and mean intensities on days when MKE is in the 90th perc. 
+# The MKE and mean intensities on days when MKE is in the 90th perc.
 # are then correlated.
 # This result helps to illustrate the potential relationship between
 # meanders and MHWs.
@@ -161,15 +165,15 @@ doMC::registerDoMC(cores = 50)
 
 ### region: the acronym for the study region of interest
 ## finalStatistic: The result being shown. This is currently two things:
-# cooc: This stands for co-occurrence and the figures show the rate of co-occurence 
+# cooc: This stands for co-occurrence and the figures show the rate of co-occurence
   # of the proportion of days when MWHs are occurring in a pixel against the total
-  # number of days in that pixel (0 = none, 1 = perfect) 
-# prop: This stands for co-occurrence and the figures show the rate of co-occurence 
+  # number of days in that pixel (0 = none, 1 = perfect)
+# prop: This stands for co-occurrence and the figures show the rate of co-occurence
   # of the proportion of days when MWHs are occurring in a pixel against the total
-  # number of days in that pixel (0 = none, 1 = perfect) 
+  # number of days in that pixel (0 = none, 1 = perfect)
 
 ## pixelFilter: This will say either "50" or "max"
-# 50: Only pixels that are within the 50th to 90th percentile for 
+# 50: Only pixels that are within the 50th to 90th percentile for
   # mean MKE in the region are being shown
 # max: Only pixels that have had events whose max intensity is in
   # the 90th percentile for the study region are being shown
@@ -198,9 +202,9 @@ doMC::registerDoMC(cores = 50)
   # This is the target result and the main hypothesis test
   # Doesn't look much different than cooc_90
 ## Proportion figures
-# prop_90: The proportion of days in the pixel that are at or above 
+# prop_90: The proportion of days in the pixel that are at or above
   # the 90th perc. MKE for the study area
-# prop_90_MHW: The proportion of MHW days that occurred when the KE on the given day was 
+# prop_90_MHW: The proportion of MHW days that occurred when the KE on the given day was
   # at or above the 90th perc. MKE for the study area
 # prop_anticyclone: The proportion of total days when an anticyclone was present
 # prop_anticyclone_MHW: The proportion of total MHW days when an anticyclone was present
@@ -213,9 +217,9 @@ doMC::registerDoMC(cores = 50)
 # prop_eddy: The proportion of total days when an eddy on any sort was present
 # prop_eddy_MHW: The proportion of total MHW days when an eddy of any sort was present
 # prop_no_eddy: The proportion of total days when no eddies were present
-# prop_no_eddy_90: The proportion of total days when no eddies were present and 
+# prop_no_eddy_90: The proportion of total days when no eddies were present and
   # the KE was at or above the 90th perc. MKE for the study area
-# prop_no_eddy_90_MHW: The proportion of total MHW days when no eddies were present and 
+# prop_no_eddy_90_MHW: The proportion of total MHW days when no eddies were present and
   # the KE was at or above the 90th perc. MKE for the study area
 # prop_no_eddy_MHW: The proportion of total MHW days when ano eddies were present
 

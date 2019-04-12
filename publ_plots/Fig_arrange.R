@@ -13,7 +13,6 @@ Fig.1 <- ggarrange(AC.Fig00a + labs(title = "Mean kinetic energy"),
 ggplot2::ggsave("publ_plots/Figure_1.jpg",
                 width = 7.0 * (1/3), height = 5.2 * (1/3), scale = 3.7)
 
-
 # •	Suppl. Fig. 1 (a-t). Full set of panels corresponding to Fig. 1.
 Supp.1 <- ggarrange(AC.Fig00a, AC.Fig00b, AC.Fig018, AC.Fig06,
                     BC.Fig00a, BC.Fig00b, BC.Fig018, BC.Fig06,

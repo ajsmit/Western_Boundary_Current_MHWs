@@ -77,7 +77,7 @@ find_current_points <- function(region) {
 
   coordinates(out) <- ~ lat + lon
   gridded(out) <- TRUE
-  proj4string(out) <- CRS("+proj=utm +datum=WGS84 +units=m +no_defs +ellps=WGS84 +towgs84=0,0,0")
+  proj4string(out) <- CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0")
 
   int70 <- raster(out, layer = "int70")
   mke70 <- raster(out, layer = "mke70")

@@ -11,10 +11,8 @@ library(OneR) # for binning
 
 # Miscellaneous things to load --------------------------------------------
 
-# Functions: velocities, EKE, etc.
+# Read in the region-specific components and functions
 source("setup/functions.R")
-
-# Read in the region-specific components
 source("setup/regionDefinition.R")
 source("setup/plot.layers.R")
 
@@ -61,9 +59,9 @@ EAC.ev <- c("2005-10-21", "2005-11-20", "2000-12-04", "2000-12-26", "2017-01-07"
 GS.ev <- c("2014-03-01", "2014-04-2", "2014-11-23", "2015-02-24", "2018-03-05", "2018-05-02")
 KC.ev <- c("2013-03-31", "2013-05-05", "2007-06-04", "2007-06-15", "2013-09-09", "2013-09-15")
 
-# region <- "AC"
-# plot.parameters <- AC.layers
-# ev.date <- AC.ev
+region <- "BC"
+plot.parameters <- AC.layers
+ev.date <- AC.ev
 
 eddy_plot <- function(eddies, region, plot.parameters, ev.date) {
   # bathy data
@@ -83,23 +81,19 @@ eddy_plot <- function(eddies, region, plot.parameters, ev.date) {
 
   # find eddies that start in the WBCs
   load(paste0("masks/", region, "-mask_points.Rdata"))
-
-  stations_subset <- stations[zones, ]
-
-  # points
-  mask.pts$mke.pt
+  load(paste0("masks/", region, "-mask_polys.Rdata"))
 
   # polys
-  mask.list$mke90
-  class(mask.list$int90)
+  poly <- mask.list$mke90
 
-  # eddies
-  eddies
-  eddies.pts <- SpatialPoints(eddies[, c(1,2)])
+  # set same proj4string for points as is present in poly
+  pts <- SpatialPoints(eddies[, c(2,1)])
+  proj4string(pts) <- CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0")
 
-  over(mask.pts$mke.pt, mask.list$mke90)
+  # apply over function to extract points that fall within poly
+  pts_in <- as.data.frame(pts[!is.na(over(pts, poly)), ])
 
-  tracks <- dplyr::right_join(eddies, mask.pts$mke.pt) %>%
+  tracks <- dplyr::right_join(eddies, pts_in) %>%
     dplyr::filter(observation_number == 0) %>%
     dplyr::select(track)
 
@@ -134,8 +128,8 @@ eddy_plot <- function(eddies, region, plot.parameters, ev.date) {
     theme_map() +
     plot.parameters
 
-  ggplot2::ggsave("eddies/Fig018_Eddy_trajectories_AC.jpg",
-                  width = 3.5 * (1/3), height = 2.6 * (1/3), scale = 3.7)
+  # ggplot2::ggsave("eddies/Fig018_Eddy_trajectories_AC.jpg",
+  #                 width = 3.5 * (1/3), height = 2.6 * (1/3), scale = 3.7)
 
   return(eddy_plt)
 }
