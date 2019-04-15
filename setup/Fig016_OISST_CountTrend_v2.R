@@ -70,14 +70,14 @@ gv.plot <- function(data, plot.parameters, bathy, region) {
     geom_contour(aes(x = lon, y = lat, z = pval),
                  binwidth = 0.05, breaks = c(0.05),
                  colour = "white", size = 0.2) +
-    # geom_polygon(data = int, aes(long, lat, group = group),
-    #              fill = NA, colour = "purple", size = 0.3) +
+    geom_polygon(data = int, aes(long, lat, group = group),
+                 fill = NA, colour = "purple", size = 0.3) +
     geom_polygon(data = mke, aes(long, lat, group = group),
                  fill = NA, colour = "red3", size = 0.3) +
-    # geom_polygon(data = eke, aes(long, lat, group = group),
-    #              fill = NA, colour = "navy", size = 0.3) +
+    geom_polygon(data = eke, aes(long, lat, group = group),
+                 fill = NA, colour = "navy", size = 0.3) +
     guides(alpha = "none",
-           fill = guide_colourbar(title = "(events/dec)",
+           fill = guide_colourbar(title = "(days/dec)",
                                   frame.colour = "black",
                                   frame.linewidth = 0.4,
                                   ticks.colour = "black",

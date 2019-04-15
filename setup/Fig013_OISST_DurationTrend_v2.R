@@ -64,9 +64,15 @@ GS_annualCountTrend <- ddply(GS_annualCount, .(lon, lat), linFun, poissan = FALS
 
 # Make a function to create the basic plot components ---------------------
 
-gv.plot <- function(data, plot.parameters, bathy) {
+gv.plot <- function(data, plot.parameters, bathy, region) {
 
   data$slope <- round(data$slope, 2)
+
+  maskDir <- "/Users/ajsmit/Dropbox/R/WBCs/masks/"
+  load(paste0(maskDir, region, "-mask_polys.RData"))
+  mke <- fortify(mask.list$mke90)
+  eke <- fortify(mask.list$eke90)
+  int <- fortify(mask.list$int90)
 
   fig <- ggplot(data, aes(x = lon, y = lat)) +
     geom_raster(aes(fill = slope)) +
@@ -78,6 +84,12 @@ gv.plot <- function(data, plot.parameters, bathy) {
     geom_contour(aes(x = lon, y = lat, z = pval),
                  binwidth = 0.05, breaks = c(0.05),
                  colour = "white", size = 0.2) +
+    geom_polygon(data = int, aes(long, lat, group = group),
+                 fill = NA, colour = "purple", size = 0.3) +
+    geom_polygon(data = mke, aes(long, lat, group = group),
+                 fill = NA, colour = "red3", size = 0.3) +
+    geom_polygon(data = eke, aes(long, lat, group = group),
+                 fill = NA, colour = "navy", size = 0.3) +
     guides(alpha = "none",
            fill = guide_colourbar(title = "(d/yr/dec)",
                                   frame.colour = "black",
@@ -94,11 +106,11 @@ gv.plot <- function(data, plot.parameters, bathy) {
   return(fig)
 }
 
-AC.Fig016_v2 <- gv.plot(AC_annualCountTrend, AC.layers, AC_bathy)
-BC.Fig016_v2 <- gv.plot(BC_annualCountTrend, BC.layers, BC_bathy)
-EAC.Fig016_v2 <- gv.plot(EAC_annualCountTrend, EAC.layers, EAC_bathy)
-KC.Fig016_v2 <- gv.plot(KC_annualCountTrend, KC.layers, KC_bathy)
-GS.Fig016_v2 <- gv.plot(GS_annualCountTrend, GS.layers, GS_bathy)
+AC.Fig013_v2 <- gv.plot(AC_annualCountTrend, AC.layers, AC_bathy, "AC")
+BC.Fig013_v2 <- gv.plot(BC_annualCountTrend, BC.layers, BC_bathy, "BC")
+EAC.Fig013_v2 <- gv.plot(EAC_annualCountTrend, EAC.layers, EAC_bathy, "EAC")
+GS.Fig013_v2 <- gv.plot(GS_annualCountTrend, GS.layers, GS_bathy, "GS")
+KC.Fig013_v2 <- gv.plot(KC_annualCountTrend, KC.layers, KC_bathy, "KC")
 
 Fig016_v2 <- ggarrange(AC.Fig016_v2,
                        BC.Fig016_v2,

@@ -72,10 +72,10 @@ gv.plot <- function(data, plot.parameters, bathy, region) {
                  col = "black", size = 0.15, breaks = c(-500, -1000, -2000)) +
     geom_polygon(data = int, aes(long, lat, group = group),
                  fill = NA, colour = "purple", size = 0.3) +
-    # geom_polygon(data = mke, aes(long, lat, group = group),
-    #              fill = NA, colour = "red3", size = 0.3) +
-    # geom_polygon(data = eke, aes(long, lat, group = group),
-    #              fill = NA, colour = "navy", size = 0.3) +
+    geom_polygon(data = mke, aes(long, lat, group = group),
+                 fill = NA, colour = "red3", size = 0.3) +
+    geom_polygon(data = eke, aes(long, lat, group = group),
+                 fill = NA, colour = "navy", size = 0.3) +
     guides(fill = guide_colourbar(title = "(°C/dec)",
                                   frame.colour = "black",
                                   frame.linewidth = 0.4,
