@@ -49,11 +49,8 @@ ke.fun <- function(region) {
   nc_close(nc)
 
   out <- ke %>%
-    na.omit() %>%
-    dplyr::mutate(eke = 0.5 * ((vgosa)^2 + (ugosa)^2)) %>%
     dplyr::group_by(lon, lat) %>%
-    dplyr::mutate(eke = roll_mean(eke, n = 30, align = "center", fill = c(-999, -999, -999))) %>%
-    dplyr::filter(eke > -999) %>%
+    dplyr::mutate(eke = 0.5 * ((vgosa)^2 + (ugosa)^2)) %>%
     dplyr::summarise(mke = 0.5 * (mean(vgos, na.rm = TRUE)^2 + mean(ugos, na.rm = TRUE)^2),
                      eke = mean(eke, na.rm = TRUE)) %>%
     dplyr::ungroup()

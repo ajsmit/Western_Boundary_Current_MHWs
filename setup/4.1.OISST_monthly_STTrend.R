@@ -50,9 +50,8 @@ AC <- fread(paste0(inDir, "/AC-avhrr-only-v2.19810901-20180930.csv"),
             col.names = c("lon", "lat", "temp", "t"))
 # AC$t <- fastDate(AC$t) # faster here, not in the daily2monthly function...
 AC_monthly <- daily2monthly(AC)
-system.time(AC_gls <- dlply(AC_monthly, .(lon, lat), .progress = "text",
+system.time(AC_df <- ddply(AC_monthly, .(lon, lat), .progress = "text",
                             .parallel = TRUE, gls_fun))
-AC_df <- ldply(AC_gls, data.frame, .parallel = TRUE, .progress = "text")
 fwrite(AC_df,
        paste0(outDir, "/AC-rate-",
               format(as.Date(AC_monthly$month, format = "%Y%m%d"), "%Y%m%d")[1], "-",
@@ -64,9 +63,8 @@ BC <- fread(paste0(inDir, "/BC-avhrr-only-v2.19810901-20180930.csv"),
             colClasses = list("numeric" = 1:3, "Date" = 4),
             col.names = c("lon", "lat", "temp", "t"))
 BC_monthly <- daily2monthly(BC)
-system.time(BC_gls <- dlply(BC_monthly, .(lon, lat), .progress = "text",
+system.time(BC_df <- ddply(BC_monthly, .(lon, lat), .progress = "text",
                             .parallel = TRUE, gls_fun))
-BC_df <- ldply(BC_gls, data.frame, .parallel = TRUE, .progress = "text")
 fwrite(BC_df,
        paste0(outDir, "/BC-rate-",
               format(as.Date(BC_monthly$month, format = "%Y%m%d"), "%Y%m%d")[1], "-",
@@ -78,9 +76,8 @@ EAC <- fread(paste0(inDir, "/EAC-avhrr-only-v2.19810901-20180930.csv"),
              colClasses = list("numeric" = 1:3, "Date" = 4),
              col.names = c("lon", "lat", "temp", "t"))
 EAC_monthly <- daily2monthly(EAC)
-system.time(EAC_gls <- dlply(EAC_monthly, .(lon, lat), .progress = "text",
+system.time(EAC_df <- ddply(EAC_monthly, .(lon, lat), .progress = "text",
                              .parallel = TRUE, gls_fun))
-EAC_df <- ldply(EAC_gls, data.frame, .parallel = TRUE, .progress = "text")
 fwrite(EAC_df,
        paste0(outDir, "/EAC-rate-",
               format(as.Date(EAC_monthly$month, format = "%Y%m%d"), "%Y%m%d")[1], "-",
@@ -92,9 +89,8 @@ GS <- fread(paste0(inDir, "/GS-avhrr-only-v2.19810901-20180930.csv"),
             colClasses = list("numeric" = 1:3, "Date" = 4),
             col.names = c("lon", "lat", "temp", "t"))
 GS_monthly <- daily2monthly(GS)
-system.time(GS_gls <- dlply(GS_monthly, .(lon, lat), .progress = "text",
+system.time(GS_df <- ddply(GS_monthly, .(lon, lat), .progress = "text",
                             .parallel = TRUE, gls_fun))
-GS_df <- ldply(GS_gls, data.frame, .parallel = TRUE, .progress = "text")
 fwrite(GS_df,
        paste0(outDir, "/GS-rate-",
               format(as.Date(GS_monthly$month, format = "%Y%m%d"), "%Y%m%d")[1], "-",
@@ -106,9 +102,8 @@ KC <- fread(paste0(inDir, "/KC-avhrr-only-v2.19810901-20180930.csv"),
             colClasses = list("numeric" = 1:3, "Date" = 4),
             col.names = c("lon", "lat", "temp", "t"))
 KC_monthly <- daily2monthly(KC)
-system.time(KC_gls <- dlply(KC_monthly, .(lon, lat), .progress = "text",
+system.time(KC_df <- ddply(KC_monthly, .(lon, lat), .progress = "text",
                             .parallel = TRUE, gls_fun))
-KC_df <- ldply(KC_gls, data.frame, .parallel = TRUE, .progress = "text")
 fwrite(KC_df,
        paste0(outDir, "/KC-rate-",
               format(as.Date(KC_monthly$month, format = "%Y%m%d"), "%Y%m%d")[1], "-",

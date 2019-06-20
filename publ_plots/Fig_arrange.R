@@ -5,6 +5,7 @@
 # /Users/ajsmit/Dropbox/R/WBCs/setup/Fig06_OISST_MeanInt.R
 
 # Figure 1 (a-d). MKE, EKE, eddy trajectories, and MHW intensity of the Agulhas Current.
+# Use figures produced by Fig00_Aviso_MKE_EKE_v2.R
 Fig.1 <- ggarrange(
   AC.Fig00a + labs(title = "Mean kinetic energy"),
   AC.Fig00b + labs(title = "Eddy kinetic energy"),
@@ -22,6 +23,7 @@ ggplot2::ggsave(
 )
 
 # •	Suppl. Fig. 1 (a-t). Full set of panels corresponding to Fig. 1.
+# Use figures produced by Fig00_Aviso_MKE_EKE_v2.R
 Supp.1 <- ggarrange(
   AC.Fig00a,
   AC.Fig00b,
@@ -106,8 +108,8 @@ ggplot2::ggsave(
   scale = 3.7
 )
 
-# Figure 4. Trends of MHW metrics mean intensity and frequency of selected WBCs… [duration trends not strongly associated with KE features or with regions where the MHWs are most intense.]
-Fig.4 <-
+# Figure 5. Trends of MHW metrics mean intensity and frequency of selected WBCs… [duration trends not strongly associated with KE features or with regions where the MHWs are most intense.]
+Fig.5 <-
   ggarrange(
     AC.Fig010 + labs(title = "Mean MHW intensity trend"),
     AC.Fig016_v2 + labs(title = "MHW count trend"),
@@ -124,14 +126,14 @@ Fig.4 <-
     labels = "AUTO"
   )
 ggplot2::ggsave(
-  "publ_plots/Figure_4.jpg",
+  "publ_plots/Figure_5.jpg",
   width = 7.0 * (1 / 3),
   height = 13 * (1 / 3),
   scale = 3.7
 )
 
-# •	Suppl. Fig. 2. Full set of panels matching Fig. 4, including also trend in duration.
-Supp.2 <-
+# •	Suppl. Fig. 3. Full set of panels matching Fig. 4, including also trend in duration.
+Supp.3 <-
   ggarrange(
     AC.Fig04 + labs(title = "Mean SST trend"),
     AC.Fig010 + labs(title = "MHW mean int. trend"),
@@ -158,7 +160,7 @@ Supp.2 <-
     labels = "AUTO"
   )
 ggplot2::ggsave(
-  "publ_plots/Suppl.Fig.2.jpg",
+  "publ_plots/Suppl.Fig.3.jpg",
   width = 14.0 * (1 / 3),
   height = 13 * (1 / 3),
   scale = 3.7

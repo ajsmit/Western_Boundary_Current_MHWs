@@ -1,0 +1,16 @@
+Regridding performed with NCO:
+First, make time into a record dimension (from a fixed dimension); do this for each of the the downloaded Aviso+ files:
+> ncks --mk_rec_dmn time infile.nc -O outfile.nc
+(the above are in the shell script in the Aviso+ netCDF directories, e.g. /Volumes/Benguela/Aviso/global/delayed-time/grids/msl/all-sat-merged/AC/unlimDim.sh)
+
+Now concatenate these files along the record dimension (i.e. time):
+> ncrcat infile????.nc outfile.nc
+(see the shell script for additional details)
+
+Make a 'template' file from the OISST data, which will be used as the grid to interpolate to. Since these data are global, they need to be subsetted first; this is termed creating a hyperslab in NCO speak. Thus, create a hyperslab that corresponds to each WBC region's spatial extent, e.g. for the Agulhas Current:
+> ncks -F -d lon,6.25,45. -d lat,-45.,-20. avhrr-only-v2.20180930.nc AC_template.nc
+
+The template file is just a daily netCDF files of the region of interest.
+
+Now interpolate the Aviso file to the OISST template file:
+> ncremap -i outfile.nc -d AC_template.nc -o outfile_regridded.nc
