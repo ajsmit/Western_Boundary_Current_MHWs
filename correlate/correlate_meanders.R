@@ -144,7 +144,7 @@ doMC::registerDoMC(cores = 50)
 # Set cores
 doMC::registerDoMC(cores = 50)
 
-# Calculate the results in sone shot
+# Calculate the results in one shot
 # plyr::ldply(.data = colnames(bbox)[-6], .fun = meander_co_calc, .parallel = T)
 
 # Calculate the results in serial
