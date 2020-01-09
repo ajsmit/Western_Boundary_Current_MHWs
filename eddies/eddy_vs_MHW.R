@@ -24,8 +24,11 @@
 
 source("setup/meanderFunctions.R")
 
+require(rgeos); require(maptools) # maptools must be loaded after rgeos
+library(PBSmapping)
 
-# Load data ---------------------------------------------------------------
+
+# Function ----------------------------------------------------------------
 
 # region <- "AC"
 eddy_vs_MHW <- function(region){
@@ -36,7 +39,6 @@ eddy_vs_MHW <- function(region){
   # They use the radius of the eddy to find which pixels in the OISST data would be affected
   print("Loading eddy data")
   AVISO_eddy <- fread(paste0("~/data/WBC/AVISO_eddy_mask_",region,".csv"), nThread = 30) %>% 
-    # unite(lon_mask, lat_mask, col = "coord_index", sep = "", remove = F) %>% 
     dplyr::rename(lon_eddy = lon, lat_eddy = lat,
                   lon = lon_mask, lat = lat_mask,
                   t = time) %>%
@@ -68,7 +70,6 @@ eddy_vs_MHW <- function(region){
   pixel_pts_in$MKE_50 <- TRUE
   
   tracks <- dplyr::right_join(start_eddy, start_pts_in) %>%
-    # dplyr::filter(observation_number == 0) %>%
     dplyr::select(track) %>% 
     unique()
   
@@ -93,15 +94,55 @@ eddy_vs_MHW <- function(region){
   
   # Calculate the proportion of pixels experiencing a MHW per day
   eddy_MHW_daily <- eddy_MHW %>% 
-    group_by(lon_eddy, lat_eddy, t, amplitude, cyclonic_type, observation_number, 
-             observed_flag, speed_average, speed_radius, track) %>% 
-    # tally()
-    mutate(pixel_daily = n(),
-           pixel_daily_MHW = length(which(event_no > 0)),
-           pixel_daily_MHW_prop = round(pixel_daily_MHW/pixel_daily, 4))
+    group_by(lon_eddy, lat_eddy, t, cyclonic_type, track) %>% 
+    summarise(pixel_daily = n(),
+              pixel_MHW = length(which(event_no > 0)),
+              pixel_daily_MHW_prop = round(pixel_MHW/pixel_daily, 4),
+              pixel_daily_MHW_prop = replace_na(pixel_daily_MHW_prop, 0),
+              # Calculate proportion occuring within MKE 50 perc region
+              pixel_MKE = length(which(MKE_50 == TRUE)),
+              pixel_MKE_MHW = length(which(MKE_50 == TRUE & event_no > 0)),
+              pixel_MKE_MHW_prop = round(pixel_MKE_MHW/pixel_MKE, 4),
+              pixel_MKE_MHW_prop = replace_na(pixel_MKE_MHW_prop, 0),
+              # Calculate proportion outside of MKE 50th perc.
+              pixel_no_MKE = length(which(MKE_50 == FALSE)),
+              pixel_no_MKE_MHW = length(which(MKE_50 == FALSE & event_no > 0)),
+              pixel_no_MKE_MHW_prop = round(pixel_no_MKE_MHW/pixel_no_MKE, 4),
+              pixel_no_MKE_MHW_prop = replace_na(pixel_no_MKE_MHW_prop, 0),)
 
+  # Calculate the overall proportions of MHW co-occurrence for each eddy
+  eddy_MHW_total <- eddy_MHW_daily %>% 
+    group_by(track, cyclonic_type) %>% 
+    summarise_if(is.numeric, mean) %>% 
+    mutate_if(is.numeric, round, 2)
   
   # Save and clean up
-  fwrite(AVISO_MHW_eddy_50, file = paste0("~/data/WBC/eddy_vs_MHW_",region,".csv"), nThread = 10)
-  rm(AVISO_MHW_eddy_50, AVISO_MHW_eddy_max); gc()
+  eddy_MHW_res <- list(daily = eddy_MHW_daily,
+                       total = eddy_MHW_total)
+  save(eddy_MHW_res, file = paste0("eddies/eddy_vs_MHW_",region,".Rdata"))
+  rm(AVISO_eddy, MHW_clim); gc()
 }
+
+
+# Calculate ---------------------------------------------------------------
+
+# Run sequentially
+for(i in 1:(ncol(bbox)-1)){
+
+  # Determine region
+  region <- colnames(bbox)[i]
+  print(paste0("Began run on ",region," at ",Sys.time()))
+
+  # Mask the regions
+     # NB: This runs the MKE and Eddy masks
+  eddy_vs_MHW(region)
+  print(paste0("Finished run on ",region," at ",Sys.time()))
+
+  # Clear up some RAM
+  gc()
+} # ~ 2.5 minutes each
+
+
+# Visualise ---------------------------------------------------------------
+
+
