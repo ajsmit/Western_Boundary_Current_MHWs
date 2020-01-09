@@ -37,7 +37,7 @@ theme_map <- function(...) {
 
 # Colours -----------------------------------------------------------------
 
-# colours from:
+# 19 colours from:
 # Backeberg, B. C., et al. (2012). Impact of intensified Indian Ocean
 # winds on mesoscale variability in the Agulhas system.
 # Nature Climate Change, 2(8), 608–612. http://doi.org/10.1038/nclimate1587
@@ -45,6 +45,13 @@ col1 <- c("#223D80", "#264C8B", "#285B97", "#2378AB", "#237AAF", "#348FBF",
           "#65ADD1", "#95CAE2", "#CBE6EF", "#FFFFFE", "#F3C9CA", "#E8969A",
           "#E06D71", "#D94A50", "#D6373C", "#D53136", "#D42B31", "#CD2830",
           "#B5282F")
+
+# 16 colours from:
+# Biastich et al (2008) Mesoscale perturbations control inter-ocean exchange
+# south of Africa. Geophysical Research Letters, 35, L20602. http://doi:10.1029/2008GL035132
+col3 <- c("#d6fefe", "#bcfdfe", "#acf1f7", "#a2d9ea", "#98c1de", "#8eaad0",
+          "#8593c4", "#8a79ac", "#b85c71", "#eb483f", "#ed6137", "#ef7e35",
+          "#f29d38", "#f5bc41", "#fadd4b", "#fffd54")
 
 col1_51 <- colorRampPalette(col1)(51) # make more colours inbetween...
 

@@ -11,6 +11,7 @@ library(RcppRoll)
 source("setup/functions.R")
 source("setup/plot.layers.R")
 source("setup/regionDefinition.R")
+source("setup/colour_palettes.R")
 
 
 # Define session ----------------------------------------------------------
@@ -53,7 +54,7 @@ load_data <- function(region) {
     0.5 * (ugos^2 + vgos^2),
     ((abs(ugos * vgos) / max(abs(ugos * vgos))) + 0.3) / 6
   )]
-  geo[, c("ugos", "vgos", "ugosa", "vgosa", "sla", "adt") := NULL]
+  geo[, c("ugosa", "vgosa", "sla", "adt") := NULL]
 
   # Join the tables
   setkey(clim, lon, lat, t)
@@ -66,8 +67,9 @@ load_data <- function(region) {
 }
 
 dat <- load_data(region)
-plt.dat <- dat[t >= "2015-07-01" & t <= "2018-06-30", ]
-plt.dat[, cum := cumsum(ev), by = c("lon", "lat")]
+plt.dat <- dat[t >= "2006-01-01" & t <= "2015-12-31", ]
+# plt.dat <- plt.dat[ex > 0]
+# plt.dat[, cum := cumsum(ev), by = c("lon", "lat")]
 # summary(plt.dat)
 # test.dat <- dat[t >= "2015-07-01" & t <= "2015-07-31", ]
 # test.dat[, cum := cumsum(ev), by = c("lon", "lat")]
@@ -76,24 +78,74 @@ plt.dat[, cum := cumsum(ev), by = c("lon", "lat")]
 
 # The plot function -------------------------------------------------------
 
+oceFun2 <- function(data) {
+  out <- data %>%
+    dplyr::mutate(lon = round(lon, 0),
+                  lat = round(lat, 0)) %>%
+    dplyr::group_by(lon, lat) %>%
+    dplyr::summarise(ugos = mean(ugos, na.rm = TRUE),
+                     vgos = mean(vgos, na.rm = TRUE),
+                     velocity = mean(velocity, na.rm = TRUE)) %>%
+    dplyr::ungroup() %>%
+    dplyr::filter(velocity > 0.3831)
+  return(out)
+}
+
 combo_plot <- function(data, plot.parameters, region) {
   maskDir <- "/Users/ajsmit/Dropbox/R/WBCs/masks/"
   load(paste0(maskDir, region, "-mask_polys.RData"))
   mke90 <- fortify(mask.list$mke90)
   eke90 <- fortify(mask.list$eke90)
   int90 <- fortify(mask.list$int90)
-  top_right <- ggplot(data, aes(x = lon, y = lat)) +
+
+  # data <- plt.dat %>%
+  #   dplyr::filter(t == "2006-01-01")
+
+  vec <- oceFun2(data)
+
+  current_uv_scalar <- 1.25
+  top_left <- ggplot(data, aes(x = lon, y = lat)) +
+    geom_raster(aes(fill = eke)) +
+    # geom_polygon(data = mke90, aes(long, lat, group = group),
+    #              fill = alpha("gray50", 0.5), colour = "red3", size = 0.3) +
+    geom_polygon(data = int90, aes(long, lat, group = group),
+                 fill = NA, colour = "purple", size = 0.2) +
+    geom_polygon(data = eke90, aes(long, lat, group = group),
+                 fill = NA, colour = "navy", size = 0.2) +
+    scale_fill_gradientn(colours = col4, na.value = "#011789",
+                         limits = c(0, 4)) +
+    geom_segment(data = vec, aes(xend = lon + ugos * current_uv_scalar,
+                                 yend = lat + vgos * current_uv_scalar,
+                                 size = velocity / 5),
+                 colour = "black", linejoin = "mitre",
+                 arrow = arrow(angle = 17.5, length = unit(0.1, "cm"), type = "open")) +
+    scale_size(range = c(0.025, 0.25)) +
+    guides(size = "none") +
+    guides(fill = "none") +
+    theme_map() + labs(x = NULL, y = NULL) +
+    plot.parameters + labs(subtitle = "Geostrophic velocity", title = as.character(unique(data$t)))
+
+  ggsave(filename = paste0("~/Desktop/", data[1, "no"], "-", region, "-",
+                           as.character(unique(data$t)), "-anim_sequence.jpg"),
+         plot = top_left, width = 1.0313, height = 1.716 / 2, scale = 3.7)
+
+  top_right <- ggplot(filter(data, ex > 0), aes(x = lon, y = lat)) +
     geom_raster(aes(fill = ex)) +
     # geom_polygon(data = mke90, aes(long, lat, group = group),
     #              fill = alpha("gray50", 0.5), colour = "red3", size = 0.3) +
     geom_polygon(data = int90, aes(long, lat, group = group),
                  fill = NA, colour = "purple", size = 0.2) +
-    # geom_polygon(data = eke75, aes(long, lat, group = group),
-    #              fill = alpha("gray50", 0.5), colour = "navy", size = 0.3,
-    #              linetype = "dashed") +
     geom_polygon(data = eke90, aes(long, lat, group = group),
                  fill = NA, colour = "navy", size = 0.2) +
-    scale_fill_continuous_diverging(palette = "Blue-Red 3", na.value = "#011789", rev = FALSE) +
+    scale_fill_continuous_sequential(palette = "Plasma", na.value = "#011789", rev = TRUE,
+                                    limits = c(0, 7)) +
+    geom_segment(data = vec, aes(xend = lon + ugos * current_uv_scalar,
+                                 yend = lat + vgos * current_uv_scalar,
+                                 size = velocity / 5),
+                 colour = "black", linejoin = "mitre",
+                 arrow = arrow(angle = 17.5, length = unit(0.1, "cm"), type = "open")) +
+    scale_size(range = c(0.025, 0.25)) +
+    guides(size = "none") +
     guides(fill = guide_colourbar(title = "[°C]",
                                   frame.colour = "black",
                                   frame.linewidth = 0.4,
@@ -107,38 +159,23 @@ combo_plot <- function(data, plot.parameters, region) {
     theme_map() +
     plot.parameters + labs(subtitle = "SST exceedence over threshold", title = " ")
 
-  top_left <- ggplot(data, aes(x = lon, y = lat)) +
-    geom_raster(aes(fill = eke)) +
-    # geom_polygon(data = mke90, aes(long, lat, group = group),
-    #              fill = alpha("gray50", 0.5), colour = "red3", size = 0.3) +
-    geom_polygon(data = int90, aes(long, lat, group = group),
-                 fill = NA, colour = "purple", size = 0.2) +
-    # geom_polygon(data = eke75, aes(long, lat, group = group),
-    #              fill = alpha("gray50", 0.5), colour = "navy", size = 0.3,
-    #              linetype = "dashed") +
-    geom_polygon(data = eke90, aes(long, lat, group = group),
-                 fill = NA, colour = "navy", size = 0.2) +
-    scale_fill_continuous_sequential(palette = "Viridis", na.value = "#011789", rev = TRUE, breaks = c(500, 4100, 7700)) +
-    guides(fill = "none") +
-    theme_map() + labs(x = NULL, y = NULL) +
-    plot.parameters + labs(subtitle = "Gestrophic velocity", title = as.character(unique(data$t)))
-
-  # llim <- min(data$cum)
-  # ulim <- max(data$cum)
-
   bottom_left <- ggplot(data, aes(x = lon, y = lat)) +
     geom_raster(aes(fill = anom)) +
     # geom_polygon(data = mke90, aes(long, lat, group = group),
     #              fill = alpha("gray50", 0.5), colour = "red3", size = 0.3) +
     geom_polygon(data = int90, aes(long, lat, group = group),
                  fill = NA, colour = "purple", size = 0.2) +
-    # geom_polygon(data = eke75, aes(long, lat, group = group),
-    #              fill = alpha("gray50", 0.5), colour = "navy", size = 0.3,
-    #              linetype = "dashed") +
     geom_polygon(data = eke90, aes(long, lat, group = group),
                  fill = NA, colour = "navy", size = 0.2) +
     scale_fill_continuous_diverging(palette = "Blue-Red 3", na.value = "#011789", rev = FALSE,
                                     limits = c(-6.5, 8)) +
+    geom_segment(data = vec, aes(xend = lon + ugos * current_uv_scalar,
+                                 yend = lat + vgos * current_uv_scalar,
+                                 size = velocity / 5),
+                 colour = "black", linejoin = "mitre",
+                 arrow = arrow(angle = 17.5, length = unit(0.1, "cm"), type = "open")) +
+    scale_size(range = c(0.025, 0.25)) +
+    guides(size = "none") +
     guides(fill = guide_colourbar(title = "[°C]",
                                   frame.colour = "black",
                                   frame.linewidth = 0.4,
@@ -152,19 +189,12 @@ combo_plot <- function(data, plot.parameters, region) {
     theme_map() + labs(x = NULL, y = NULL) +
     plot.parameters + labs(subtitle = "SST anomaly", title = " ")
 
-  # bottom_right <- ggplot(data, aes(x = lon, y = lat)) +
-  #   geom_raster(aes(fill = cum)) +
-  #   scale_fill_continuous_sequential(palette = "Purples 3", na.value = "#011789", rev = TRUE,
-  #                                    limits = c(0, 532)) +
-  #   guides(fill = "none") +
-  #   theme_map() + labs(x = NULL, y = NULL) +
-  #   plot.parameters + labs(subtitle = "Event count", title = " ")
 
-  fig <- ggarrange(top_left, top_right, bottom_left, ncol = 1, nrow = 3)
+  fig <- ggarrange(top_left, top_right, bottom_left, ncol = 2, nrow = 2)
 
   ggsave(filename = paste0("~/temp/", region, "/", data[1, "no"], "-", region, "-",
                            as.character(unique(data$t)), "-anim_sequence.jpg"),
-         plot = fig, width = 1.0313, height = 1.287 * 2, scale = 3.7)
+         plot = fig, width = 1.0313 * 2, height = 1.716, scale = 3.7)
 }
 
 # Apply the function! -----------------------------------------------------
@@ -182,7 +212,7 @@ plt.dat %>%
 
 # animate in the terminal using ffmpeg:
 ffmpeg \
--framerate 5 \
+-framerate 15 \
 -pattern_type glob -i '*.jpg' \
 -vf scale=1280:-2 \
 AC_out.mp4 \

@@ -112,7 +112,7 @@ assemble <- function(lw, tag) {
 }
 
 
-# GET READY: SET REGION, LOAD DATA, AND GO! -------------------------------
+# GET READY, SET REGION, LOAD DATA, AND GO! -------------------------------
 
 
 # Agulhas Current ---------------------------------------------------------

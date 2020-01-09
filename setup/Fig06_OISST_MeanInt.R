@@ -46,7 +46,7 @@ GS.MeanInt <- MeanInt(GS.events)
 # Make a function to create the basic plot components ---------------------
 
 gv.plot <- function(data, plot.parameters, bathy, region) {
-  load(paste0("/Users/ajsmit/Dropbox/R/WBCs/masks/", region, "-mask_polys.RData"))
+  load(paste0("/Volumes/GoogleDrive/My Drive/R/WBCs/masks/", region, "-mask_polys.RData"))
   int <- fortify(mask.list$int90)
   fig <- ggplot(data, aes(x = lon, y = lat)) +
     geom_raster(aes(fill = y)) +

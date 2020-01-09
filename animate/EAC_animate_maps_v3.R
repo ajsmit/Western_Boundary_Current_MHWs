@@ -121,7 +121,7 @@ combo_plot <- function(data, plot.parameters, region) {
     scale_fill_continuous_sequential(palette = "Viridis", na.value = "#011789", rev = TRUE, breaks = c(500, 4100, 7700)) +
     guides(fill = "none") +
     theme_map() + labs(x = NULL, y = NULL) +
-    plot.parameters + labs(subtitle = "Gestrophic velocity", title = as.character(unique(data$t)))
+    plot.parameters + labs(subtitle = "Geostrophic velocity", title = as.character(unique(data$t)))
 
   # llim <- min(data$cum)
   # ulim <- max(data$cum)

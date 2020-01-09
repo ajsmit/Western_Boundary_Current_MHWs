@@ -36,6 +36,7 @@ library(doMC); doMC::registerDoMC(cores = 3)
 
 # read in the region-specific components
 source("setup/plot.layers.R")
+source("setup/functions.R")
 
 # Exceedence above threshold per month:
 # this function calculates for each month and each pixel the
@@ -48,7 +49,7 @@ uber.fun <- function(region) {
 
   clim[, t := fastDate(t)]
   ex <- clim[t >= "1993-01-01" & t <= "2018-06-10", ] # trim to match start date of Aviso data
-  ex[, ex := roll_mean((temp - thresh), n = 30, align = "center"), by = .(lon, lat)]
+  ex[, ex := roll_mean((temp - thresh), n = 30, align = "center", fill = c(-999, -999, -999)), by = .(lon, lat)]
   ex[, c("doy", "temp", "seas", "thresh") := NULL]
   rm(clim)
 
@@ -74,9 +75,9 @@ uber.fun <- function(region) {
 
   ke[, eke := (0.5 * ((vgosa)^2 + (ugosa)^2))]
   ke[, c("mke_roll", "eke_roll1", "eke_roll2") := .(
-    0.5 * (roll_mean(vgos, n = 30, align = "center")^2 + roll_mean(ugos, n = 30, align = "center")^2),
-    0.5 * ((vgos - roll_mean(vgos, n = 30, align = "center"))^2 + (ugos - roll_mean(ugos, n = 30, align = "center"))^2),
-    roll_mean(eke, n = 30, align = "center")
+    0.5 * (roll_mean(vgos, n = 30, align = "center", fill = c(-999, -999, -999))^2 + roll_mean(ugos, n = 30, align = "center", fill = c(-999, -999, -999))^2),
+    0.5 * ((vgos - roll_mean(vgos, n = 30, align = "center", fill = c(-999, -999, -999)))^2 + (ugos - roll_mean(ugos, n = 30, align = "center", fill = c(-999, -999, -999)))^2),
+    roll_mean(eke, n = 30, align = "center", fill = c(-999, -999, -999))
   ), by = .(lon, lat)
   ]
   ke <- na.omit(ke)

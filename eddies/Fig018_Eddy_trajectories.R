@@ -23,7 +23,7 @@ source("setup/plot.layers.R")
 # for converting julian date to calendar date, see:
 # https://stackoverflow.com/questions/20789612/convert-julian-date-to-calendar-dates-within-a-data-frame-in-r
 
-ncFile <- "~/lustre/Aviso/global/delayed-time/value-added/eddy-trajectory/eddy_trajectory_2.0exp_19930101_20180118.nc"
+ncFile <- "/Volumes/Benguela/lustre/Aviso/global/delayed-time/value-added/eddy-trajectory/eddy_trajectory_2.0exp_19930101_20180118.nc"
 nc <- nc_open(ncFile)
 eddies <- tibble(lat = round(ncvar_get(nc, varid = "latitude"), 4), # observation longitude
                  lon = round(ncvar_get(nc, varid = "longitude"), 4), # observation latitude
@@ -59,7 +59,7 @@ EAC.ev <- c("2005-10-21", "2005-11-20", "2000-12-04", "2000-12-26", "2017-01-07"
 GS.ev <- c("2014-03-01", "2014-04-2", "2014-11-23", "2015-02-24", "2018-03-05", "2018-05-02")
 KC.ev <- c("2013-03-31", "2013-05-05", "2007-06-04", "2007-06-15", "2013-09-09", "2013-09-15")
 
-region <- "BC"
+region <- "AC"
 plot.parameters <- AC.layers
 ev.date <- AC.ev
 
@@ -110,7 +110,7 @@ eddy_plot <- function(eddies, region, plot.parameters, ev.date) {
 
   ev_eddies <- dplyr::right_join(WBC_eddies, WBC_eddies_ev)
 
-  load(paste0("/Users/ajsmit/Dropbox/R/WBCs/masks/", region, "-mask_polys.RData"))
+  load(paste0("/Volumes/GoogleDrive/My Drive/R/WBCs/masks/", region, "-mask_polys.RData"))
   mke <- fortify(mask.list$mke90)
 
   eddy_plt <- ggplot(data = WBC_eddies, aes(x = lon, y = lat)) +
