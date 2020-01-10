@@ -31,24 +31,24 @@ library(PBSmapping)
 # Function ----------------------------------------------------------------
 
 # region <- "AC"
-eddy_vs_MHW <- function(region){
-  
+eddy_vs_MHW <- function(region) {
+
   # Load pre-processed detailed eddy data
   # NB: These data are only on tikoraluk
   # They are created in 'correlate/correlate_meanders.R'
   # They use the radius of the eddy to find which pixels in the OISST data would be affected
   print("Loading eddy data")
-  AVISO_eddy <- fread(paste0("~/data/WBC/AVISO_eddy_mask_",region,".csv"), nThread = 30) %>% 
+  AVISO_eddy <- fread(paste0("~/data/WBC/AVISO_eddy_mask_",region,".csv"), nThread = 30) %>%
     dplyr::rename(lon_eddy = lon, lat_eddy = lat,
                   lon = lon_mask, lat = lat_mask,
                   t = time) %>%
     mutate(lon = ifelse(lon < 0, lon+360, lon),
-           lon_eddy = ifelse(lon_eddy < 0, lon_eddy+360, lon_eddy)) %>% 
+           lon_eddy = ifelse(lon_eddy < 0, lon_eddy+360, lon_eddy)) %>%
     mutate_if(is.numeric, round, 3)
-  
-  start_eddy <- AVISO_eddy %>% 
-    group_by(track) %>% 
-    filter(observation_number == 0) %>% 
+
+  start_eddy <- AVISO_eddy %>%
+    group_by(track) %>%
+    filter(observation_number == 0) %>%
     ungroup()
 
   # Load MKE masks
@@ -56,45 +56,45 @@ eddy_vs_MHW <- function(region){
   mke_masks <- readRDS(paste0("masks/masks_",region,".Rds"))
   load(paste0("masks/", region, "-mask_points.Rdata"))
   load(paste0("masks/", region, "-mask_polys.RData"))
-  
-  # set same proj4string for points as is present in poly
+
+  # Set same proj4string for points as is present in poly
   poly <- mask.list$mke
   start_pts <- SpatialPoints(unique(start_eddy[, c(2,1)]))
   pixel_pts <- SpatialPoints(unique(AVISO_eddy[, c(11,12)]))
   proj4string(start_pts) <- CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0")
   proj4string(pixel_pts) <- CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0")
-  
-  # find eddies that start in the WBCs
+
+  # Find eddies that start in the WBCs
   start_pts_in <- as.data.frame(start_pts[!is.na(over(start_pts, poly)), ])
   pixel_pts_in <- as.data.frame(pixel_pts[!is.na(over(pixel_pts, poly)), ])
   pixel_pts_in$MKE_50 <- TRUE
-  
+
   tracks <- dplyr::right_join(start_eddy, start_pts_in) %>%
-    dplyr::select(track) %>% 
+    dplyr::select(track) %>%
     unique()
-  
+
   WBC_eddies <- AVISO_eddy %>%
     dplyr::filter(track %in% tracks$track) %>%
     dplyr::mutate(cyclonic_type = as.factor(cyclonic_type),
                   t = as.Date(t))
-  
-  # Load MHW dresults
+
+  # Load MHW results
   print("Loading MHW clim data")
   MHW_clim <- fread(paste0("~/data/WBC/MHW_clim_",region,".csv"), nThread = 30) %>%
     filter(event == TRUE) %>%
     mutate(intensity = temp-thresh,
            t = as.Date(t)) %>%
     mutate_if(is.numeric, round, 3)
-  
+
   # Join eddy and MHW data
   print("Joining eddy and MHW data")
-  eddy_MHW <- left_join(WBC_eddies, MHW_clim, by = c("lon", "lat", "t")) %>% 
-    left_join(pixel_pts_in, by = c("lon", "lat")) %>% 
+  eddy_MHW <- left_join(WBC_eddies, MHW_clim, by = c("lon", "lat", "t")) %>%
+    left_join(pixel_pts_in, by = c("lon", "lat")) %>%
     mutate(MKE_50 = ifelse(is.na(MKE_50), FALSE, MKE_50))
-  
+
   # Calculate the proportion of pixels experiencing a MHW per day
-  eddy_MHW_daily <- eddy_MHW %>% 
-    group_by(lon_eddy, lat_eddy, t, cyclonic_type, track) %>% 
+  eddy_MHW_daily <- eddy_MHW %>%
+    group_by(lon_eddy, lat_eddy, t, cyclonic_type, track) %>%
     summarise(pixel_daily = n(),
               pixel_MHW = length(which(event_no > 0)),
               pixel_daily_MHW_prop = round(pixel_MHW/pixel_daily, 4),
@@ -111,11 +111,11 @@ eddy_vs_MHW <- function(region){
               pixel_no_MKE_MHW_prop = replace_na(pixel_no_MKE_MHW_prop, 0),)
 
   # Calculate the overall proportions of MHW co-occurrence for each eddy
-  eddy_MHW_total <- eddy_MHW_daily %>% 
-    group_by(track, cyclonic_type) %>% 
-    summarise_if(is.numeric, mean) %>% 
+  eddy_MHW_total <- eddy_MHW_daily %>%
+    group_by(track, cyclonic_type) %>%
+    summarise_if(is.numeric, mean) %>%
     mutate_if(is.numeric, round, 2)
-  
+
   # Save and clean up
   eddy_MHW_res <- list(daily = eddy_MHW_daily,
                        total = eddy_MHW_total)
@@ -127,7 +127,7 @@ eddy_vs_MHW <- function(region){
 # Calculate ---------------------------------------------------------------
 
 # Run sequentially
-for(i in 1:(ncol(bbox)-1)){
+for(i in 1:(ncol(bbox)-1)) {
 
   # Determine region
   region <- colnames(bbox)[i]
