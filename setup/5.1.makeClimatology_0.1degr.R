@@ -3,7 +3,7 @@
 library(heatwaveR)
 library(tictoc)
 library(data.table)
-library(doMC); doMC::registerDoMC(cores = 3)
+library(doMC); doMC::registerDoMC(cores = 7)
 source("setup/functions.R")
 
 
@@ -28,7 +28,7 @@ tic()
 OISST_AC <- vroom::vroom(file = paste0(OISSTDir, "/AC-avhrr-only-v2.19810901-20180930.csv"),
                          delim = ",",
                          col_names = c("lon", "lat", "temp", "t"),
-                         col_types  = c(lon = "d", lat = "d", temp = "d", t = "D"),
+                         col_types = c(lon = "d", lat = "d", temp = "d", t = "D"),
                          na = c("", "NA", "NULL"))
 toc()
 

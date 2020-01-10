@@ -1,7 +1,7 @@
 # Calculate the mean (long-term) MKE, EKE and mean intensity for masking
 
 library(tidyverse)
-library(data.table) # still required for fread() and fwrite()
+# library(data.table) # still required for fread() and fwrite()
 library(raster)
 library(sf)
 library(rgeos)
@@ -9,9 +9,9 @@ library(smoothr)
 library(ncdf4)
 library(RcppRoll)
 library(ggpubr)
-library(doMC); doMC::registerDoMC(cores = 3)
+library(doMC); doMC::registerDoMC(cores = 7)
 
-# region <- "EAC"
+# region <- "AC"
 
 mask.fun <- function(region) {
   # Read in the Aviso data
@@ -49,6 +49,7 @@ mask.fun <- function(region) {
   # ke <- na.omit(ke)
 
   ke <- reshape2::melt(ke, value.name = "ugos") # slower, but more memory efficient than data.table?
+
   ke <- ke %>%
     dplyr::mutate(vgos = round(as.vector(ncvar_get(nc, varid = "vgos")) * 100, 2),
                   ugosa = round(as.vector(ncvar_get(nc, varid = "ugosa")) * 100, 2),
@@ -91,7 +92,7 @@ mask.fun <- function(region) {
     rate_onset = col_double(),
     rate_decline = col_double()
   )
-  events <- vroom(
+  events <- vroom::vroom(
     file       = paste0(csvDir, "/", region, "-avhrr-only-v2.19810901-20180930_events.csv"),
     skip       = 1,
     # col_select = c(lon, lat, intensity_mean),
