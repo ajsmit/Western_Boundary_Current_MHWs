@@ -110,14 +110,14 @@ eddy_vs_MHW <- function(region) {
               pixel_no_MKE = length(which(MKE_90 == FALSE)),
               pixel_no_MKE_MHW = length(which(MKE_90 == FALSE & event_no > 0)),
               pixel_no_MKE_MHW_prop = round(pixel_no_MKE_MHW/pixel_no_MKE, 4),
-              pixel_no_MKE_MHW_prop = replace_na(pixel_no_MKE_MHW_prop, 0),) %>% 
+              pixel_no_MKE_MHW_prop = replace_na(pixel_no_MKE_MHW_prop, 0),) %>%
     ungroup()
 
   # Calculate the overall proportions of MHW co-occurrence for each eddy
   eddy_MHW_total <- eddy_MHW_daily %>%
     group_by(track, cyclonic_type) %>%
     summarise_if(is.numeric, mean) %>%
-    ungroup() %>% 
+    ungroup() %>%
     mutate_if(is.numeric, round, 2)
 
   # Save and clean up
@@ -151,25 +151,25 @@ for(i in 1:(ncol(bbox)-1)) {
 
 # Map showing all of the eddy tracks
 # region <- "BC"
-eddy_track_map <- function(region){
-  
+eddy_track_map <- function(region) {
+
   # Load data
   load(paste0("masks/", region, "-mask_polys.RData"))
   load(paste0("eddies/eddy_vs_MHW_",region,".Rdata"))
-  
+
   # Prep
-  mke <- fortify(mask.list$mke) %>% 
+  mke <- fortify(mask.list$mke) %>%
     mutate(long = ifelse(long > 180, long - 360, long))
-  eddy_MHW_res_daily <- eddy_MHW_res$daily %>% 
-    ungroup() %>% 
+  eddy_MHW_res_daily <- eddy_MHW_res$daily %>%
+    ungroup() %>%
     mutate(lon_eddy = ifelse(lon_eddy > 180, lon_eddy - 360, lon_eddy))
-  coords <- bbox %>% 
-    select({{region}}) %>% 
-    mutate(coord = row.names(.)) %>% 
-    spread(key = coord, value = {{region}}) %>% 
+  coords <- bbox %>%
+    select({{region}}) %>%
+    mutate(coord = row.names(.)) %>%
+    spread(key = coord, value = {{region}}) %>%
     mutate(lonmin = ifelse(lonmin > 180, lonmin - 360, lonmin),
            lonmax = ifelse(lonmax > 180, lonmax - 360, lonmax))
-  
+
   # Plot
   ggplot(data = eddy_MHW_res_daily, aes(x = lon_eddy, y = lat_eddy)) +
     geom_point(aes(colour = pixel_no_MKE_MHW_prop), alpha = 0.2) +
@@ -197,13 +197,13 @@ ggplot2::ggsave("eddies/eddy_map.jpg", plot = eddy_map,
 # region <- "AC"
 eddy_hist_plot <- function(region){
   load(paste0("eddies/eddy_vs_MHW_",region,".Rdata"))
-  eddy_MHW_res$total$cyclonic_type <- factor(eddy_MHW_res$total$cyclonic_type, 
+  eddy_MHW_res$total$cyclonic_type <- factor(eddy_MHW_res$total$cyclonic_type,
                                              labels = c("Cyclonic", "Anticyclonic"))
   ggplot(data = eddy_MHW_res$total, aes(x = pixel_daily_MHW_prop)) +
     geom_histogram(aes(fill = cyclonic_type), position = "dodge", binwidth = 0.1) +
-    geom_label(aes(label = paste0(region,"\n", 
+    geom_label(aes(label = paste0(region,"\n",
                                   "Cyclonic = ",length(which(eddy_MHW_res$total$cyclonic_type == "Cyclonic")),
-                                  "\nAnticyclonic = ",length(which(eddy_MHW_res$total$cyclonic_type == "Anticyclonic"))), 
+                                  "\nAnticyclonic = ",length(which(eddy_MHW_res$total$cyclonic_type == "Anticyclonic"))),
                    x = 0.6, y = nrow(eddy_MHW_res$total)/6)) +
     scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
     coord_cartesian(expand = F) +
