@@ -11,14 +11,16 @@
 # With these databases recreated here, the next step is to re-calculate KE
 
 # Then the eddy trajectory product from AVISO is used to create an eddy mask
-#
-# AJS: How? Why?
+  # The eddy mask is created by taking the centre of each eddy and it's radius
+  # These two values are used to find all of the OISST pixels that fall within
+  # Once these pixels are determined we may then see what was happening in the
+  # same space as the ddies
 
 # With all of the results ready, the next step is to use the 90th perc.
 # MKE mask and the 50th perc. MKE mask to define the region within which
 # we want to compare MKE and MHW intensity
-#
-# AJS: Why a 50the perc MKE mask?
+# These two values were picked as a reasonable starting point
+# MKE 50th perc. has since been left in favour of MKE 90th perc.
 
 # We then mask these results with the eddy trajectory mask
 
@@ -33,7 +35,7 @@
 source("setup/meanderFunctions.R")
 
 
-# Subet AVISO and calculate KE --------------------------------------------
+# Subset AVISO and calculate KE -------------------------------------------
 
 # Set cores
 doMC::registerDoMC(cores = 50)

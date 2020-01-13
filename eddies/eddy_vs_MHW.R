@@ -29,6 +29,34 @@ library(PBSmapping)
 library(ggpubr)
 
 
+# Test visuals ------------------------------------------------------------
+
+# Load masks
+mke_masks <- readRDS(paste0("masks/masks_",region,".Rds"))
+load(paste0("masks/", region, "-mask_points.Rdata"))
+load(paste0("masks/", region, "-mask_polys.RData"))
+
+# Load lite eddy track data.frame for testing
+eddy_test_mask_AC <- WBC_eddies %>% 
+  filter(track %in% head(unique(WBC_eddies$track)))
+
+# Eddy mask visuals
+# Change the track number subset to visualise different eddies
+mke <- fortify(mask.list$mke) %>%
+  mutate(long = ifelse(long > 180, long - 360, long))
+ggplot(filter(eddy_test_mask_AC, track == 0), aes(x = lon, y = lat)) +
+  geom_raster(aes(fill = t), alpha = 0.8) +  # The size of the eddy
+  geom_point(aes(x = lon_eddy, y = lat_eddy), colour = "red") + # The centre of the eddy
+  geom_polygon(data = mke, aes(long, lat, group = group),
+               colour = "red3", size = 0.4, fill = NA) +
+  borders(fill = "grey80") +
+  # scale_fill_viridis_c(option = "D") + # Doesn't work with dates...
+  scale_fill_date() + #Reversing the colourbar took to long to figure out...
+  coord_cartesian(xlim = bbox[,"AC"][3:4],
+                  ylim = bbox[,"AC"][1:2]) +
+  labs(fill = "Date", x = NULL, y = NULL)
+
+
 # Function ----------------------------------------------------------------
 
 # region <- "AC"
@@ -39,6 +67,7 @@ eddy_vs_MHW <- function(region) {
   # They are created in 'correlate/correlate_meanders.R'
   # They use the radius of the eddy to find which pixels in the OISST data would be affected
   print("Loading eddy data")
+    # NB: These files are sitting on tikoraluk and are ~1 GB per region
   AVISO_eddy <- fread(paste0("~/data/WBC/AVISO_eddy_mask_",region,".csv"), nThread = 30) %>%
     dplyr::rename(lon_eddy = lon, lat_eddy = lat,
                   lon = lon_mask, lat = lat_mask,
@@ -51,7 +80,7 @@ eddy_vs_MHW <- function(region) {
     group_by(track) %>%
     filter(observation_number == 0) %>%
     ungroup()
-
+  
   # Load MKE masks
   print("Finding eddies within 90th. perc MKE")
   mke_masks <- readRDS(paste0("masks/masks_",region,".Rds"))
@@ -79,7 +108,7 @@ eddy_vs_MHW <- function(region) {
     dplyr::filter(track %in% tracks$track) %>%
     dplyr::mutate(cyclonic_type = as.factor(cyclonic_type),
                   t = as.Date(t))
-
+  
   # Load MHW results
   print("Loading MHW clim data")
   MHW_clim <- fread(paste0("~/data/WBC/MHW_clim_",region,".csv"), nThread = 30) %>%

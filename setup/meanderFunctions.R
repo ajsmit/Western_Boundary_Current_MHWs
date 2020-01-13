@@ -261,7 +261,7 @@ dist_calc <- function(df, cells){
   # before calculating distance of eddies from nearby pixels
   rough_radius <- ceiling(df$speed_radius/50)
   
-  # Filter pixles by rough radius
+  # Filter pixels by rough radius
   cells_sub <- cells %>% 
     filter(lon <= df$lon+rough_radius, 
            lon >= df$lon-rough_radius,
